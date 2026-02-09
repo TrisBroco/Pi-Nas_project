@@ -1,0 +1,190 @@
+package com.mynas.backend.controller;
+
+import com.mynas.backend.database.RefreshToken;
+import com.mynas.backend.database.repositories.RefreshTokenRepository;
+import com.mynas.backend.service.security.JwtService;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.*;
+
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
+import java.util.Map;
+import java.util.Optional;
+
+@RestController
+@RequestMapping("/auth")
+public class AuthController {
+
+    private final AuthenticationManager authManager;
+    private final JwtService jwtService;
+    private final RefreshTokenRepository refreshRepo;
+
+    @Value("${app.cookie-secure}")
+    private boolean secure;
+    @Value("${app.sameSite}")
+    private String sameSite;
+
+    public AuthController(AuthenticationManager authManager, JwtService jwtService,
+                          RefreshTokenRepository refreshRepo) {
+        this.authManager = authManager;
+        this.jwtService = jwtService;
+        this.refreshRepo = refreshRepo;
+    }
+
+    // Helper function to extract a cookie value
+    private String extractCookieValue(HttpServletRequest request, String name) {
+        return Arrays.stream(Optional.ofNullable(request.getCookies()).orElse(new Cookie[0]))
+                .filter(c -> name.equals(c.getName()))
+                .map(Cookie::getValue)
+                .findFirst()
+                .orElse(null);
+    }
+
+    // Helper function to create the ResponseCookie
+    private ResponseCookie createCookie(String name, String value, String path, long maxAge, boolean isHttpOnly) {
+        if(maxAge < 0) {
+            maxAge = (60 * 10);
+        }
+        return ResponseCookie.from(name, value)
+                .httpOnly(isHttpOnly)
+                .secure(secure)
+                .path(path)
+                .maxAge(maxAge)
+                .sameSite(sameSite)
+                .build();
+    }
+
+
+    /*
+       Login endpoint:
+       (FIXED: Added @Transactional)
+    */
+    @PostMapping("/login")
+    @Transactional // <-- REQUIRED for delete and save operations
+    public ResponseEntity<?> login(@RequestBody Map<String,String> body, HttpServletResponse response) {
+        String username = body.get("username");
+        String password = body.get("password");
+
+        System.out.println("/AUTH/LOGIN");
+        try {
+            authManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(username, password)
+            );
+        }
+        catch (AuthenticationException ex) {
+            System.out.println("Authentication Exception");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error","Invalid credentials"));
+        }
+
+        // Invalidate any existing refresh token for this user (prevent multiple active tokens)
+        refreshRepo.deleteByUsername(username);
+
+        String newAccess = jwtService.generateAccessToken(username);
+        String newRefresh = jwtService.generateRefreshToken(username);
+
+        // Persist the new refresh token
+        RefreshToken rt = new RefreshToken();
+        rt.setUsername(username);
+        rt.setToken(newRefresh);
+        rt.setCreatedAt(Instant.now());
+        rt.setExpiresAt(Instant.now().plus(7, ChronoUnit.DAYS));
+        refreshRepo.save(rt);
+
+        // Create cookies
+        ResponseCookie accessCookie = createCookie("access_token", newAccess, "/", -1, true);
+        ResponseCookie refreshCookie = createCookie("refresh_token", newRefresh, "/", (60L * 60 * 24 * 7), true);
+
+        // Use addHeader for each cookie
+        response.addHeader(HttpHeaders.SET_COOKIE, accessCookie.toString());
+        response.addHeader(HttpHeaders.SET_COOKIE, refreshCookie.toString());
+
+        return ResponseEntity.ok(Map.of("status","ok"));
+    }
+
+    /*
+       Token Refresh endpoint:
+       (FIXED: Added @Transactional)
+    */
+
+    @GetMapping("/me")
+    public ResponseEntity<?> me(@AuthenticationPrincipal UserDetails user) {
+        System.out.println("/AUTH/ME");
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        return ResponseEntity.ok(Map.of(
+                "username", user.getUsername()
+        ));
+    }
+
+
+    @PostMapping("/refresh")
+    @Transactional // <-- REQUIRED for delete and save operations
+    public ResponseEntity<?> refresh(HttpServletRequest request, HttpServletResponse response) {
+        System.out.println("/AUTH/REFRESH");
+
+        // Use helper to read refresh cookie
+        String refreshToken = extractCookieValue(request, "refresh_token");
+
+        if (refreshToken == null || !jwtService.isTokenValid(refreshToken)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error","No or invalid refresh token"));
+        }
+
+        // Ensure refresh token exists in DB
+        Optional<RefreshToken> found = refreshRepo.findByToken(refreshToken);
+        if (found.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error","Token invalid or expired"));
+        }
+
+
+        // 2. Generate NEW access token
+        String username = jwtService.extractUsername(refreshToken);
+        String newAccess = jwtService.generateAccessToken(username);
+
+        // 4. Set NEW cookies in the response
+        ResponseCookie newAccessCookie = createCookie("access_token", newAccess, "/", -1, true);
+        // Use addHeader for each cookie
+        response.addHeader(HttpHeaders.SET_COOKIE, newAccessCookie.toString());
+
+        return ResponseEntity.ok(Map.of("status","ok"));
+    }
+
+    /*
+       Logout endpoint:
+       (FIXED: Added @Transactional)
+    */
+    @PostMapping("/logout")
+    @Transactional // <-- REQUIRED for delete operation
+    public ResponseEntity<?> logout(HttpServletRequest request, HttpServletResponse response) {
+        // remove refresh token from DB if present
+        String refreshToken = extractCookieValue(request, "refresh_token");
+        if (refreshToken != null) {
+            refreshRepo.deleteByToken(refreshToken);
+        }
+        System.out.println("/AUTH/LOGOUT");
+        // Clear cookies (maxAge = 0)
+        ResponseCookie clearAccess = createCookie("access_token", "", "/", 0, true);
+        ResponseCookie clearRefresh = createCookie("refresh_token", "", "/", 0, true);
+
+        // Use addHeader for each cookie
+        response.addHeader(HttpHeaders.SET_COOKIE, clearAccess.toString());
+        response.addHeader(HttpHeaders.SET_COOKIE, clearRefresh.toString());
+
+        return ResponseEntity.ok(Map.of("status","logged-out"));
+    }
+}

@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>NAS File Browser</title>
+    <link rel="stylesheet" th:href="@{/css/styles.css}" />
+    <meta th:if="${converting}" http-equiv="refresh" content="5"/>
+
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <style>
+        a:link {
+            color: #8bb4f7;
+            background-color: transparent;
+            text-decoration: none;
+        }
+        a:visited {
+            color: pink;
+            background-color: transparent;
+            text-decoration: none;
+        }
+        a:hover {
+            color: red;
+            background-color: transparent;
+            text-decoration: underline;
+        }
+        a:active {
+            color: yellow;
+            background-color: transparent;
+            text-decoration: underline;
+        }
+        li p, li a, li table {
+            /* Overrides the default block behavior */
+            display: inline-block;
+            height: 1em;
+        }
+    </style>
+</head>
+<body style="background: var(--color-background-dark); color: var(--color-text-dark)">
+<h2>Files</h2>
+<ul>
+    <li th:each="file : ${files}">
+        <p th:if="${!#strings.endsWith(file, '.mp4') and !#strings.endsWith(file, '.mp3')}" th:text="${file}"></p>
+
+        <a th:if="${#strings.endsWith(file, '.mp4')}"
+           th:href="@{/api/watch/{f}(f=${file})}"
+           th:text="${file}"></a>
+
+        <a th:if="${#strings.endsWith(file, '.mp3')}"
+           th:href="@{/api/watch/{f}(f=${file})}"
+           th:text="${file}"></a>
+
+        <a th:href="@{/api/download/{f}(f=${file})}">| Download </a>
+
+        <table th:if="${#strings.endsWith(file, '.mkv')}">
+            <tr>
+                <p> | </p>
+                <td>
+                    <button class="convert-btn" th:attr="data-filename=${file}">Convert to MP4</button>
+                </td>
+            </tr>
+        </table>
+    </li>
+</ul>
+
+<script>
+    document.querySelectorAll('.convert-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const filename = btn.dataset.filename;
+            convertFile(filename); // your JS function
+        });
+    });
+</script>
+
+
+<div th:if="${converting}">
+<!--<div>-->
+    <p><strong>Conversion in progress…</strong> This page will update when done.</p>
+</div>
+
+<div th:if="${error}">
+    <p style="color:red;" th:text="${error}">Interrupted</p>
+</div>
+</body>
+
+<script>
+    async function convertFile(filename) {
+        try {
+            const response = await fetch(`/api/convert?filename=${encodeURIComponent(filename)}`);
+            const result = await response.json();
+
+            if (result.status === "exists") {
+                const { isConfirmed, isDenied } = await Swal.fire({
+                    title: "File already exists",
+                    text: `${filename} already exists. What would you like to do?`,
+                    icon: "warning",
+                    showDenyButton: true,
+                    showCancelButton: true,
+                    confirmButtonText: "Overwrite",
+                    denyButtonText: "Rename",
+                    cancelButtonText: "Cancel"
+                });
+
+                if (isConfirmed) {
+                    await fetch(`/api/convert?filename=${encodeURIComponent(filename)}&overwrite=true`);
+                    Swal.fire("Started!", "Conversion started with overwrite.", "success");
+                } else if (isDenied) {
+                    const { value: newName } = await Swal.fire({
+                        title: "Enter new name",
+                        input: "text",
+                        inputValue: filename.replace(/\.[^/.]+$/, '') + "_new.mp4",
+                        showCancelButton: true,
+                        inputValidator: (value) => !value && "You need to enter a name!"
+                    }).then((buttonResult) => {
+                        if (buttonResult.isConfirmed){
+                            location.reload();
+                        }
+                    });
+                    if (newName) {
+                        await fetch(`/api/convert?filename=${encodeURIComponent(filename)}&rename=true&newName=${encodeURIComponent(newName)}`);
+                        Swal.fire("Started!", `Conversion started with new name: ${newName}`, "success");
+                    }
+                }
+            } else if (result.status === "started") {
+                Swal.fire("Success", result.message || "Conversion started.", "info");
+            } else if(result.status === "complete") {
+                Swal.fire({
+                    title:"conversion Complete",
+                    text: result.message,
+                    icon: "success",
+                    confirmButtonText: "OK"
+                }).then((result) => {
+                    if (result.isConfirmed){
+                        location.reload();
+                    }
+                })
+            }else{
+                    Swal.fire("Error", result.message || "Something went wrong.", "error");
+                }
+        } catch (err) {
+            Swal.fire("Error", err.message, "error");
+        }
+    }
+</script>
+
+</html>

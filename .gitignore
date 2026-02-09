@@ -1,0 +1,25 @@
+# env
+.env
+.env.local
+
+# storage + docker volumes
+storage/
+dbdata/
+logs/
+
+# java
+target/
+build/
+*.jar
+
+# nextjs
+node_modules/
+.next/
+
+# ide
+.idea/
+.vscode/
+
+# os
+.DS_Store
+Thumbs.db

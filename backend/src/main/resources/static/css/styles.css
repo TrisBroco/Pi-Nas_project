@@ -1,0 +1,16 @@
+:root {
+    /* Define primary colors */
+    --color-primary: #007bff;        /* Blue */
+    --color-secondary: #6c757d;      /* Gray */
+
+    /* Define neutral colors */
+    --color-background-light: #f8f9fa; /* Light Gray/Off-White */
+    --color-text-light: #212529;      /* Dark Gray */
+
+    --color-background-dark:#313538;
+    --color-text-dark:white;
+
+    /* Define status colors */
+    --color-success: #28a745;        /* Green */
+    --color-danger: #dc3545;         /* Red */
+}
