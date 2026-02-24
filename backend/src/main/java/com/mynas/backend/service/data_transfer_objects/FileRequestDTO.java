@@ -4,6 +4,7 @@ import lombok.Getter;
 
 import java.util.List;
 
+//TODO convert to a record
 public class FileRequestDTO {
     @Getter
     private String user;

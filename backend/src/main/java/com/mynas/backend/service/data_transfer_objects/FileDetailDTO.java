@@ -8,6 +8,8 @@ import java.time.Instant;
 /**
  * Data Transfer Object for conveying file details to the client.
  */
+
+//TODO convert to a record
 @Setter
 @Getter
 public class FileDetailDTO {

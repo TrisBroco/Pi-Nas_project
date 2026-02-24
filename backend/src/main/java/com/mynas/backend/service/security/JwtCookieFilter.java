@@ -94,13 +94,10 @@ public class JwtCookieFilter extends OncePerRequestFilter {
                - IP address
                - sessionId
                - user agent
-               This is optional but standard Spring behavior.
             */
             authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
             /*
-               NOW THE IMPORTANT PART:
-
                This puts the Authentication object into Spring Security’s
                SecurityContextHolder. This is how Spring knows:
                “Yes, this user is authenticated for this request.”

@@ -115,10 +115,7 @@ public class AuthController {
         return ResponseEntity.ok(Map.of("status","ok"));
     }
 
-    /*
-       Token Refresh endpoint:
-       (FIXED: Added @Transactional)
-    */
+
 
     @GetMapping("/me")
     public ResponseEntity<?> me(@AuthenticationPrincipal UserDetails user) {
@@ -132,7 +129,10 @@ public class AuthController {
         ));
     }
 
-
+    /*
+        Token Refresh endpoint:
+        (FIXED: Added @Transactional)
+     */
     @PostMapping("/refresh")
     @Transactional // <-- REQUIRED for delete and save operations
     public ResponseEntity<?> refresh(HttpServletRequest request, HttpServletResponse response) {
@@ -152,11 +152,11 @@ public class AuthController {
         }
 
 
-        // 2. Generate NEW access token
+        // Generate NEW access token
         String username = jwtService.extractUsername(refreshToken);
         String newAccess = jwtService.generateAccessToken(username);
 
-        // 4. Set NEW cookies in the response
+        // Set NEW cookies in the response
         ResponseCookie newAccessCookie = createCookie("access_token", newAccess, "/", -1, true);
         // Use addHeader for each cookie
         response.addHeader(HttpHeaders.SET_COOKIE, newAccessCookie.toString());
@@ -164,12 +164,9 @@ public class AuthController {
         return ResponseEntity.ok(Map.of("status","ok"));
     }
 
-    /*
-       Logout endpoint:
-       (FIXED: Added @Transactional)
-    */
+
     @PostMapping("/logout")
-    @Transactional // <-- REQUIRED for delete operation
+    @Transactional
     public ResponseEntity<?> logout(HttpServletRequest request, HttpServletResponse response) {
         // remove refresh token from DB if present
         String refreshToken = extractCookieValue(request, "refresh_token");
@@ -177,7 +174,7 @@ public class AuthController {
             refreshRepo.deleteByToken(refreshToken);
         }
         System.out.println("/AUTH/LOGOUT");
-        // Clear cookies (maxAge = 0)
+        // Clear cookies (set its maxAge to 0 to make it "expired")
         ResponseCookie clearAccess = createCookie("access_token", "", "/", 0, true);
         ResponseCookie clearRefresh = createCookie("refresh_token", "", "/", 0, true);
 

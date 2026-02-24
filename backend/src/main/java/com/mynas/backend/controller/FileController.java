@@ -66,11 +66,11 @@ public class FileController {
 
             long userId = UserService.getUserId(username);
 
-            // 3. Fetch DB file records
+            // Fetch DB file records
             User user = userRepository.findByUsername(username)
                     .orElseThrow(() -> new RuntimeException("User not found"));
 
-            // 4. Convert DB entities → DTOs
+            //Convert DB entities its DTOs
             StorageDTO storage = new StorageDTO(user.getUsedStorage(), user.getMaxStorage());
 
             return ResponseEntity.ok(storage);
@@ -87,7 +87,7 @@ public class FileController {
 
         try {
             println("/list | in try statement");
-            // 1. Extract username from JWT-authenticated session
+            // Extract username from JWT-authenticated session
             String username = auth.getName();
             println("Username : " + username);
 
@@ -103,7 +103,7 @@ public class FileController {
                 println("Folder Path : " + folderPath);
             }
 
-            // 3. Fetch DB file records
+            // Fetch DB file records
             List<FileRecord> records =
                     fileRecordRepository.findByOwnerIdAndFolderPathAndIsDeletedFalse(
                             userId,
@@ -111,7 +111,7 @@ public class FileController {
                     );
             println("records : " + records);
 
-            // 4. Convert DB entities → DTOs
+            //Convert DB entities → DTOs
             List<FileMetadataDTO> files = records.stream()
                     .map(fr -> new FileMetadataDTO(
                             fr.getId(),
@@ -183,15 +183,15 @@ public class FileController {
         List<Map<String, String>> successList = new ArrayList<>();
         List<Map<String, String>> errorList = new ArrayList<>();
 
-        // -----------------------------
-        // 1. Normalize & Sanitize User + Folder
-        // -----------------------------
+
+        // Normalize & Sanitize User + Folder
+
         String safeUser = (user == null || user.isBlank()) ? "general" :
                 sanitizeFolder(user);
         String safeFolder = (folder == null || folder.isBlank()) ? ""
                 : sanitizeFolder(folder);
 
-        // Base path: /root/user
+        // Base path: exp: /root/user
         Path userBase = storagePath.resolve(safeUser);
 
         // Full final target directory as a Path
@@ -213,9 +213,9 @@ public class FileController {
                     .body(Map.of("error", "Unable to prepare directory.", "details", e.getMessage()));
         }
 
-        // -----------------------------
-        // 2. Fetch user quota & current usage
-        // -----------------------------
+
+        // Fetch user quota & current usage
+
         // Fetch user with DB lock with DBlock to avoid uploads incorrectly updating used_storage
         User userRecord = userRepository.findForUpdate(safeUser)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -225,7 +225,7 @@ public class FileController {
         long currentUsage = userRecord.getUsedStorage();
 
 
-        // 3. Process Each File
+        // Process Each File
         for (MultipartFile file : files) {
 
             if (file.isEmpty()) {
@@ -286,7 +286,7 @@ public class FileController {
                     }
                 }
 
-                // Save metadata to DB
+                // Save metadata to DB, will use for later when displaying video info
                 FileRecord record = new FileRecord();
 
                 record.setExtension(extractExtension(safeFileName));
@@ -398,7 +398,7 @@ public class FileController {
 
         Resource resource = new UrlResource(safePath.toUri());
 
-        //For mobile devices not knowing what file is being downloaded
+        //Fix for mobile devices not knowing what file is being downloaded
         // & defaulting to *.html.
         String contentType = Files.probeContentType(safePath);
 

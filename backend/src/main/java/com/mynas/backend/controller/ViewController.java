@@ -15,6 +15,14 @@ import java.util.Map;
 /*The @Controller is used to handle a view. When returning a string ex:"upload" it will
     search the "templates" folder for a static file called "upload" and return that to
     the user*/
+
+// --------------------------------------------------------------------------------------------
+    /* TODO Deprecated | Remove view Controller
+     No longer providing views using HTML templates. Currently Using a node.js frontend to controll
+     views and User Interaction
+     */
+// --------------------------------------------------------------------------------------------
+
 @Controller
 @RequestMapping("/api")
 public class ViewController {
@@ -54,12 +62,6 @@ public class ViewController {
 
         return "file"; // Thymeleaf view name
     }
-
-//    @GetMapping("/convert/{file}")
-//    public String convertFile(@PathVariable String file) throws IOException {
-//        Path inputFile = Path.of(fileService.getRootFolder(), file);
-//        return fileService.convertIfNeeded(inputFile);
-//    }
 
     @GetMapping("/convert")
     @ResponseBody

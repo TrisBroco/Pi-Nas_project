@@ -19,6 +19,8 @@ public class JwtService {
        - For HS256, must be at least 32 characters.
        - Should come from environment variable in real systems.
     */
+
+    //TODO move secret to your .env file for obvious security reasons
     private static final String SECRET = "PN_9FAhyWG'mWA+FwPN_Gs2J_owB8[sFd-tf8)}Kd(@KcZ$Vs";
 
     // Convert the raw string secret into a SecretKey object usable by JJWT.

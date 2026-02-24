@@ -16,8 +16,6 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import org.springframework.web.servlet.config.annotation.CorsRegistry;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import java.util.List;
 
@@ -50,7 +48,7 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         System.out.println("SecurityConfig - SecurityFilterChain()");
         http
-                // Disable CSRF because REST APIs do not use session cookies.
+                // Disabled CSRF because REST APIs do not use session cookies.
                 //consider enabling CSRF protection if we use cookies for
                 // state-changing ops.
                 .csrf(csrf -> csrf.disable())
@@ -104,7 +102,13 @@ public class SecurityConfig {
         System.out.println("SecurityConfig - CorsConfigurationSource()");
         CorsConfiguration config = new CorsConfiguration();
         // Allowed origin: change to your frontend origin (e.g. https://nas.example.com or http://localhost:3000 during dev)
-        config.setAllowedOrigins(List.of("http://localhost:3000", "https://your-nas-domain.example"));
+        config.setAllowedOrigins(List.of("http://localhost:3000", "http://192.168.1.156:3000"));
+        //todo
+        // - check and simply list of approved origins in something
+        //          like the prod.properties file or .env for security and public github.
+        //          local connections only for now so its okay.
+
+        config.setAllowedOrigins(List.of("http://pi-nas:3000", "http://192.168.1.152:3000"));
         config.setAllowCredentials(true); // important so browser will send cookies
         config.setAllowedMethods(List.of("GET","POST","PUT","DELETE","OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
@@ -122,6 +126,8 @@ public class SecurityConfig {
     @Bean
     public AuthenticationProvider authenticationProvider() {
         System.out.println("SecurityConfig - AuthenticationProvider()");
+
+        // todo circle back and replace the deprecated methods
         DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
 
         provider.setUserDetailsService(userDetailsService);
@@ -147,26 +153,25 @@ public class SecurityConfig {
        - {bcrypt}...
        - {noop}...
        - {argon2}...
-       This is why your sample accounts work.
     */
     @Bean
     public PasswordEncoder passwordEncoder() {
         System.out.println("SecurityConfig - PasswordEncoder()");
         return PasswordEncoderFactories.createDelegatingPasswordEncoder();
     }
-
-    @Bean
-    public WebMvcConfigurer corsConfigurer() {
-        System.out.println("SecurityConfig - WebMvcConfigurer()");
-        return new WebMvcConfigurer() {
-            @Override
-            public void addCorsMappings(CorsRegistry registry) {
-                registry.addMapping("/**")
-                        .allowedOrigins("http://localhost:3000")
-                        .allowedMethods("GET","POST","PUT","DELETE")
-                        .allowCredentials(true);
-            }
-        };
-    }
+    //todo checking for relevance. Think this is another late night duplicate
+//    @Bean
+//    public WebMvcConfigurer corsConfigurer() {
+//        System.out.println("SecurityConfig - WebMvcConfigurer()");
+//        return new WebMvcConfigurer() {
+//            @Override
+//            public void addCorsMappings(CorsRegistry registry) {
+//                registry.addMapping("/**")
+//                        .allowedOrigins("http://localhost:3000")
+//                        .allowedMethods("GET","POST","PUT","DELETE")
+//                        .allowCredentials(true);
+//            }
+//        };
+//    }
 
 }
