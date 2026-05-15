@@ -1,23 +1,17 @@
 package com.mynas.backend.service;
 
-import com.mynas.backend.service.data_transfer_objects.FileDetailDTO;
 import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.Instant;
-import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @Getter
 @Service
@@ -84,37 +78,11 @@ public class FileService {
         return Files.exists(Path.of(rootFolder, "video_convert.lock"));
     }
 
-    public Path getUserFolder(Long userID){
-        return Paths.get(rootFolder).resolve("user_" + userID);
-    }
-
     public Path getSafePath(Path baseDir, String filename) throws SecurityException {
         Path resolvedPath = baseDir.resolve(filename).normalize();
         if (!resolvedPath.startsWith(baseDir)) {
             throw new SecurityException("Invalid file path: " + filename);
         }
         return resolvedPath;
-    }
-
-    public List<FileDetailDTO> listFiles() {
-        File folder = new File(rootFolder);
-
-        if (!folder.exists() || !folder.isDirectory()) {
-            throw new RuntimeException("Root folder does not exist: " + rootFolder);
-        }
-
-        // 1. Get all files, filter out directories
-        return Arrays.stream(folder.listFiles())
-                .filter(File::isFile)
-                .map(file -> {
-                    // 2. Map the java.io.File object to the DTO
-                    return new FileDetailDTO(
-                            file.getName(),
-                            file.length(), // Get file size in bytes
-                            // Get last modified time and convert it to Instant for modern usage
-                            Instant.ofEpochMilli(file.lastModified())
-                    );
-                })
-                .collect(Collectors.toList());
     }
 }

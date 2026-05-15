@@ -3,22 +3,33 @@ import {SlOptionsVertical} from "react-icons/sl";
 import {CiImageOn} from "react-icons/ci";
 import {formatFileSize} from "@/utils/formatFileSize";
 import {useUI} from "@/context/UIContext";
+import FileOptionsMenu from "@/components/menu/FileOptionMenu";
 
-export default function ListItem({file}) {
-    const downloadUrl = `/api/download?path=${encodeURIComponent(file.path)}`;
+export default function FilesListItem({file}) {
     const {openModal} = useUI();
 
-    return (<div
+    return (
+        <div
         className="w-full flex h-[4rem] header-btn rounded-sm p-0 mb-2 bg-[#1e1f20]"
         onClick={() => {
             let type = "other"
-            if (file.extension === "mp4") {
+            let ext = file.extension;
+            if (ext === "mp4") {
                 type = "video";
             }
+            if (["jpg", "jpeg", "png", "gif", "webp"].includes(ext)) {
+            type = "image";
+            }
 
-            console.log("file extension:", file.extension)
+            console.log("file extension:", ext)
+            // Build relative path from folderPath + name instead of using
+            // file.path because of my safe path check on the backend
+            const relativePath = file.folderPath
+                ? `${file.folderPath}/${file.name}`
+                : file.name;
+
             openModal(type, {
-                url: file.path,
+                url: relativePath,   // fitness/abs.mp4
                 name: file.name
             });
         }}
@@ -40,19 +51,7 @@ export default function ListItem({file}) {
         <div className="hidden items-center h-full sm:flex sm:w-[15%] flex-none ">{formatFileSize(file.size)}</div>
 
         {/*3dot Option menu */}
-        <div className=" w-[10%] sm:w-[5%] flex items-center justify-center h-full flex-none">
-            <button className="header-btn">
-                <SlOptionsVertical/>
-            </button>
-        </div>
-
-        {/*/!* Download *!/*/}
-        {/*<a*/}
-        {/*    href={downloadUrl}*/}
-        {/*    className="ml-auto text-indigo-500 hover:underline"*/}
-        {/*>*/}
-        {/*    Download*/}
-        {/*</a>*/}
+        <FileOptionsMenu file={file} />
 
     </div>);
 }

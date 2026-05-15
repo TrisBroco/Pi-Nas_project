@@ -1,6 +1,6 @@
 // lib/proxyWithAuth.ts
-import { cookies } from "next/headers";
-import { NextResponse } from "next/server";
+import {cookies} from "next/headers";
+import {NextResponse} from "next/server";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL!;
 const REFRESH_URL = `${BACKEND_URL}/auth/refresh`;
@@ -15,7 +15,7 @@ function buildCookieHeader(
         if (cookie) cookie += "; ";
         cookie += `refresh_token=${refreshToken}`;
     }
-    return cookie ? { Cookie: cookie } : {};
+    return cookie ? {Cookie: cookie} : {};
 }
 
 export async function proxyWithAuth(
@@ -28,8 +28,8 @@ export async function proxyWithAuth(
 
     if (!accessToken && !refreshToken) {
         return NextResponse.json(
-            { error: "Not authenticated" },
-            { status: 401 }
+            {error: "Not authenticated"},
+            {status: 401}
         );
     }
 
@@ -58,8 +58,8 @@ export async function proxyWithAuth(
         if (!refreshRes.ok) {
             console.log("session expired")
             return NextResponse.json(
-                { error: "Session expired" },
-                { status: 401 }
+                {error: "Session expired"},
+                {status: 401}
             );
         }
 
@@ -72,7 +72,7 @@ export async function proxyWithAuth(
 
         if (!newAccessToken) {
             console.log("No access token in refresh response!");
-            return NextResponse.json({ error: "Failed to refresh token" }, { status: 401 });
+            return NextResponse.json({error: "Failed to refresh token"}, {status: 401});
         }
 
         // Retry original request (new access token is now valid)
@@ -92,8 +92,8 @@ export async function proxyWithAuth(
         if (!backendRes.ok) {
             console.log("backendRes not okay")
             return NextResponse.json(
-                { error: "Authentication failed after refresh" },
-                { status: 401 }
+                {error: "Authentication failed after refresh"},
+                {status: 401}
             );
         }
 
@@ -106,21 +106,31 @@ export async function proxyWithAuth(
     }
 
     return NextResponse.json(
-        { error: "Authentication failed" },
-        { status: 401 }
+        {error: "Authentication failed"},
+        {status: 401}
     );
 }
 
 async function forwardResponse(res: Response) {
     const contentType = res.headers.get("content-type") || "";
 
+    let response: NextResponse;
+
     if (contentType.includes("application/json")) {
-        return NextResponse.json(await res.json());
+        response = NextResponse.json(await res.json(), {status: res.status});
+    } else {
+        // fix for browser lock-up on downloads. don't load into memory
+        const headers = new Headers();
+        ["content-type", "content-disposition", "content-length"].forEach(key => {
+            const val = res.headers.get(key);
+            if (val) headers.set(key, val);
+        });
+        response = new NextResponse(res.body, {status: res.status, headers});
     }
 
-    // For streams / files later
-    return new NextResponse(res.body, {
-        status: res.status,
-        headers: res.headers,
+    res.headers.getSetCookie().forEach(cookie => {
+        response.headers.append("Set-Cookie", cookie);
     });
+
+    return response;
 }

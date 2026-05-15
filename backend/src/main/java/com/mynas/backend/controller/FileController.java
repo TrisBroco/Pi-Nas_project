@@ -8,9 +8,7 @@ import com.mynas.backend.database.repositories.FileRecordRepository;
 import com.mynas.backend.database.repositories.UserRepository;
 import com.mynas.backend.service.FileService;
 import com.mynas.backend.service.UserService;
-import com.mynas.backend.service.data_transfer_objects.FileDetailDTO;
 import com.mynas.backend.service.data_transfer_objects.FileMetadataDTO;
-import com.mynas.backend.service.data_transfer_objects.FileRequestDTO;
 import com.mynas.backend.service.data_transfer_objects.StorageDTO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,7 +29,7 @@ import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static com.mynas.backend.service.IO.*;
+import static com.mynas.backend.service.IO.println;
 
 @RestController
 @RequestMapping("/api")
@@ -44,6 +42,7 @@ public class FileController {
     private final FileRecordRepository fileRecordRepository;
     private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
+    UserService userService;
 
     public FileController(FileService fileService,
                           FileRecordRepository fileRecordRepository,
@@ -54,6 +53,7 @@ public class FileController {
         this.fileRecordRepository = fileRecordRepository;
         this.userRepository = userRepository;
         this.objectMapper = objectMapper;
+        userService = new UserService(userRepository);
     }
 
     @GetMapping("/storage")
@@ -61,19 +61,17 @@ public class FileController {
             Authentication auth,
             @RequestHeader(value = "Cookie", required = false) String rawCookie) {
 
-            String username = auth.getName();
-            println("Username : " + username);
+        String username = auth.getName();
+        println("Username : " + username);
 
-            long userId = UserService.getUserId(username);
+        // Fetch DB file records
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
-            // Fetch DB file records
-            User user = userRepository.findByUsername(username)
-                    .orElseThrow(() -> new RuntimeException("User not found"));
+        //Convert DB entities its DTOs
+        StorageDTO storage = new StorageDTO(user.getUsedStorage(), user.getMaxStorage());
 
-            //Convert DB entities its DTOs
-            StorageDTO storage = new StorageDTO(user.getUsedStorage(), user.getMaxStorage());
-
-            return ResponseEntity.ok(storage);
+        return ResponseEntity.ok(storage);
     }
 
     @GetMapping("/list")
@@ -84,6 +82,8 @@ public class FileController {
     ) {
 
         println("Cookie Received: " + rawCookie);
+        println("/list | folderPath received: '" + folderPath + "'");
+
 
         try {
             println("/list | in try statement");
@@ -91,7 +91,8 @@ public class FileController {
             String username = auth.getName();
             println("Username : " + username);
 
-            long userId = UserService.getUserId(username);
+
+            long userId = userService.getUserId(username);
             if (userId == -1L) {
                 return ResponseEntity.status(404).body(Map.of("error", "User not found"));
             }
@@ -102,6 +103,7 @@ public class FileController {
                 folderPath = "";
                 println("Folder Path : " + folderPath);
             }
+            println("/list | folderPath bytes: " + Arrays.toString(folderPath.getBytes()));
 
             // Fetch DB file records
             List<FileRecord> records =
@@ -131,12 +133,31 @@ public class FileController {
                     ))
                     .toList();
 
-            println("/list | before return statement, files size: " + files.size());
+            // Extract just immediate children only
+            String prefix = folderPath.isEmpty() ? "" : folderPath + "/";
+
+            // Get all folderPaths that start with current path
+            List<String> allSubPaths = fileRecordRepository.findDistinctFolderPathsUnder(userId, prefix, folderPath);
+            println("/list | allSubPaths raw: " + allSubPaths);
+
+            String finalFolderPath = folderPath;
+            List<Map<String, String>> folders = allSubPaths.stream()
+                    .filter(p -> p.startsWith(prefix) && !p.equals(finalFolderPath))
+                    .map(p -> p.substring(prefix.length()))   // strip the current prefix
+                    .map(p -> p.contains("/") ? p.substring(0, p.indexOf("/")) : p) // first segment only
+                    .distinct()
+                    .filter(name -> !name.isBlank())
+                    .map(name -> Map.of(
+                            "name", name,
+                            "path", prefix + name
+                    ))
+                    .toList();
+
             return ResponseEntity.ok(Map.of(
                     "user", username,
                     "folder", folderPath,
-//                    "files", List.of()
-                    "files", files
+                    "files", files,
+                    "folders", folders
             ));
 
         } catch (Exception e) {
@@ -164,30 +185,19 @@ public class FileController {
     }
 
 
-    @GetMapping("/files")
-    public List<FileDetailDTO> listFiles() {
-        println("/API/FILES");
-        return fileService.listFiles();
-    }
-// Will use the requestMapping above and append the /upload to that path
-//test
-
+    //    TODO Move to FileTransferController file
     @PostMapping("/upload")
     @Transactional
     public ResponseEntity<Map<String, Object>> uploadFiles(
             @RequestParam("file") MultipartFile[] files,
-            @RequestParam(value = "user", required = false) String user,
-            @RequestParam(value = "folder", required = false) String folder
+            @RequestParam(value = "folder", required = false) String folder,
+            Authentication auth
     ) throws IOException {
 
         List<Map<String, String>> successList = new ArrayList<>();
         List<Map<String, String>> errorList = new ArrayList<>();
 
-
-        // Normalize & Sanitize User + Folder
-
-        String safeUser = (user == null || user.isBlank()) ? "general" :
-                sanitizeFolder(user);
+        String safeUser = auth.getName();
         String safeFolder = (folder == null || folder.isBlank()) ? ""
                 : sanitizeFolder(folder);
 
@@ -228,7 +238,7 @@ public class FileController {
         // Process Each File
         for (MultipartFile file : files) {
 
-            if (file.isEmpty()) {
+            if (file == null || file.isEmpty()) {
                 errorList.add(Map.of("filename", "unknown", "error", "Empty file"));
                 log.warn("Upload rejected: empty file received for user {}", safeUser);
                 continue;
@@ -242,7 +252,7 @@ public class FileController {
                         safeUser, userRecord.getUsedStorage(), maxStorage);
 
                 errorList.add(Map.of(
-                        "filename", file.getOriginalFilename(),
+                        "filename", Objects.requireNonNull(file.getOriginalFilename()),
                         "error", "User storage quota exceeded"
                 ));
                 continue; // Skip this file
@@ -253,7 +263,7 @@ public class FileController {
                     Objects.requireNonNull(file.getOriginalFilename())
             ).getFileName().toString();
 
-            // Sanitize filename itself
+            // Sanitize filename
             String safeFileName = sanitizeFilename(originalName);
 
             try {
@@ -266,13 +276,14 @@ public class FileController {
 
                 String checksum = DigestUtils.md5DigestAsHex(file.getInputStream());
 
-
-                // Save file
-                file.transferTo(destination.toFile());
-
                 // Compute relative folder path for DB
                 String relativeFolder = userBase.equals(targetDir) ? ""
                         : userBase.relativize(targetDir).toString().replace("\\", "/");
+                if (fileRecordRepository.findByPath(targetDir.resolve(safeFileName).toString()).isPresent()) {
+                    //todo - loop to index duplicates
+                    log.error("Upload rejected: file already exist for user {}", safeUser);
+                    throw new Exception("File already exists");
+                }
 
                 // Update current usage
                 currentUsage += file.getSize();
@@ -298,7 +309,14 @@ public class FileController {
                 record.setPath(targetDir.resolve(safeFileName).toString());
                 record.setFolderPath(relativeFolder);
                 userRecord.setUsedStorage(userRecord.getUsedStorage() + file.getSize());
+
+                /* TODO - NEEDS FIX | delete DB entry if file throws error
+                 *  the opposite shouldn't happen. (ie: delete file if db throws error)
+                 * */
                 fileRecordRepository.save(record);
+
+                // Save file
+                file.transferTo(destination.toFile());
 
                 log.info("Uploaded file '{}' to {} for user {}", safeFileName, destination, safeUser);
                 successList.add(Map.of(
@@ -384,13 +402,42 @@ public class FileController {
         return normalized;
     }
 
+    // Works for any file type. Serves up the file with the correct Content-Type
+//    and lets the browser decide.
+    @GetMapping("/serve")
+    public ResponseEntity<Resource> serveFile(
+            @RequestParam("filename") String filename,
+            Authentication auth) throws IOException {
+
+        String username = auth.getName();
+        Path userStoragePath = storagePath.resolve(username);
+        String normalized = filename.replace("\\", "/");
+        Path safePath = fileService.getSafePath(userStoragePath, normalized);
+
+        if (!Files.exists(safePath)) {
+            return ResponseEntity.notFound().build();
+        }
+
+        Resource resource = new UrlResource(safePath.toUri());
+        String contentType = Files.probeContentType(safePath);
+        if (contentType == null) contentType = "application/octet-stream";
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(contentType))
+                .body(resource);
+    }
+
+
+    //    TODO Move to FileTransferController file
     @GetMapping("/download")
     public ResponseEntity<Resource> downloadFile(
-            @RequestParam("filename") String filename) throws IOException {
+            @RequestParam("filename") String filename,
+            Authentication auth) throws IOException {
 
-        // TODO for user implementation
-//            Path userDir = fileService.getUserFolder(user.getId());
-        Path safePath = fileService.getSafePath(storagePath, filename);
+        String username = auth.getName();
+        Path userStoragePath = storagePath.resolve(username);
+        String normalized = filename.replace("\\", "/");
+        Path safePath = fileService.getSafePath(userStoragePath, normalized);
 
         if (!Files.exists(safePath)) {
             return ResponseEntity.notFound().build();
@@ -415,112 +462,127 @@ public class FileController {
                 .body(resource);
     }
 
-    @GetMapping(value = "/stream")
+    @GetMapping("/stream")
     public ResponseEntity<ResourceRegion> streamVideo(
             @RequestParam("filename") String filename,
-            @RequestHeader HttpHeaders headers) throws IOException {
+            @RequestHeader HttpHeaders headers,
+            Authentication auth) throws IOException {
 
-        Path safePath = fileService.getSafePath(storagePath, filename);
-
-        UrlResource media = new UrlResource(safePath.toUri());
+        String username = auth.getName();
+        Path userStoragePath = storagePath.resolve(username);
+        String normalized = filename.replace("\\", "/");
+        Path safePath = fileService.getSafePath(userStoragePath, normalized);
 
         if (!Files.exists(safePath)) {
-            return ResponseEntity.notFound().build();
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
 
+        UrlResource media = new UrlResource(safePath.toUri());
         long contentLength = media.contentLength();
+        MediaType mediaType = MediaTypeFactory.getMediaType(media)
+                .orElse(MediaType.APPLICATION_OCTET_STREAM);
+
         List<HttpRange> ranges = headers.getRange();
 
         if (!ranges.isEmpty()) {
             HttpRange range = ranges.get(0);
             ResourceRegion region = range.toResourceRegion(media);
             return ResponseEntity.status(HttpStatus.PARTIAL_CONTENT)
-                    .contentType(MediaTypeFactory.getMediaType(media)
-                            .orElse(MediaType.APPLICATION_OCTET_STREAM))
+                    .contentType(mediaType)
                     .body(region);
         } else {
             ResourceRegion region = new ResourceRegion(media, 0,
                     Math.min(1024 * 1024, contentLength));
             return ResponseEntity.status(HttpStatus.PARTIAL_CONTENT)
-                    .contentType(MediaTypeFactory.getMediaType(media)
-                            .orElse(MediaType.APPLICATION_OCTET_STREAM))
+                    .contentType(mediaType)
                     .body(region);
         }
     }
 
     @DeleteMapping("/delete")
     @Transactional
-    public ResponseEntity<Map<String, Object>> deleteFile(
-            @RequestBody FileRequestDTO request) throws IOException {
+    public ResponseEntity<?> deleteFile(
+            @RequestBody Map<String, Object> body,
+            Authentication auth) {
 
-        // ------------------------------
-        // 1. Validate User + Lock Record
-        // ------------------------------
-        User user = userRepository.findForUpdate(request.getUser())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        try {
+            String username = auth.getName();
+            long userId = userService.getUserId(username);
 
-        // ------------------------------
-        // 2. Build Safe File Path
-        // ------------------------------
-        Path filePath = resolveSafePath(
-                storagePath,
-                request.getUser(),
-                request.getFolders(),
-                request.getFilename()
-        );
+            if (userId == -1L) {
+                return ResponseEntity.status(404).body(Map.of("error", "User not found"));
+            }
 
-        if (!Files.exists(filePath)) {
-            log.warn("Delete failed: File does not exist {}", filePath);
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("error", "File not found"));
+            String filename = (String) body.get("filename");
+            String folderPath = (String) body.getOrDefault("folderPath", "");
+
+            if (filename == null || filename.isBlank()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Filename required"));
+            }
+
+            // Relative path for DB look up
+            String relativePath = folderPath.isBlank()
+                    ? filename
+                    : folderPath + "/" + filename;
+
+            // Absolute path to check on disk
+            Path userStoragePath = storagePath.resolve(username);
+            String normalized = relativePath.replace("\\", "/");
+            Path diskPath = fileService.getSafePath(userStoragePath, normalized);
+
+            // Record look up in DB
+            Optional<FileRecord> recordOpt = fileRecordRepository
+                    .findByOwnerIdAndPath(userId, diskPath.toString().replace("/", "\\"));
+
+            if (recordOpt.isEmpty()) {
+                // Try with forward slashes too (linux?)
+                recordOpt = fileRecordRepository
+                        .findByOwnerIdAndPath(userId, diskPath.toString());
+            }
+
+            if (recordOpt.isEmpty()) {
+                return ResponseEntity.status(404).body(Map.of("error", "File not found in database"));
+            }
+
+            FileRecord record = recordOpt.get();
+
+            // Soft delete — mark as deleted in DB for trash feature
+            record.setDeleted(true);
+            fileRecordRepository.save(record);
+            println("/delete | soft deleted: " + record.getName());
+
+            /* TODO Change to implement Hard delete from TRASH instead
+            // Hard delete — remove from DB entirely
+            fileRecordRepository.delete(record);
+            println("/delete | removed from DB: " + record.getName());
+
+            // Delete from disk
+            if (Files.exists(diskPath)) {
+                Files.delete(diskPath);
+                println("/delete | deleted from disk: " + diskPath);
+            } else {
+                println("/delete | file not found on disk (already gone?): " + diskPath);
+            }
+
+            // Update user storage usage TODO Still counts as data until hard delete
+            Optional<User> userOpt = userRepository.findForUpdate(username);
+            userOpt.ifPresent(user -> {
+                long newUsed = Math.max(0, user.getUsedStorage() - record.getSize());
+                user.setUsedStorage(newUsed);
+                userRepository.save(user);
+            });*/
+
+            return ResponseEntity.ok(Map.of(
+                    "status", "deleted",
+                    "file", record.getName()
+            ));
+
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).body(Map.of("error", "Access denied"));
+        } catch (Exception e) {
+            println("/delete | error: " + e.getMessage());
+            return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
         }
-
-        // ------------------------------
-        // 3. Lookup File Metadata
-        // ------------------------------
-        Optional<FileRecord> fileRecordOpt =
-                fileRecordRepository.findByOwnerIdAndPath(user.getId(), filePath.toString());
-
-        if (fileRecordOpt.isEmpty()) {
-            log.warn("Unauthorized delete attempt by user '{}' for file '{}'",
-                    user.getUsername(), filePath);
-
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("error", "You do not own this file"));
-        }
-
-        FileRecord fileRecord = fileRecordOpt.get();
-        long fileSize = fileRecord.getSize();
-
-        // ------------------------------
-        // 4. Delete File From Disk
-        // ------------------------------
-        Files.delete(filePath);
-        log.info("Deleted file: {}", filePath);
-
-        // ------------------------------
-        // 5. Update User Storage Quota
-        // ------------------------------
-        long updatedStorage = user.getUsedStorage() - fileSize;
-        if (updatedStorage < 0) updatedStorage = 0;
-
-        user.setUsedStorage(updatedStorage);
-        userRepository.save(user);
-
-        // ------------------------------
-        // 6. Remove File Record
-        // ------------------------------
-        fileRecordRepository.delete(fileRecord);
-
-        // ------------------------------
-        // 7. Return Response
-        // ------------------------------
-        return ResponseEntity.ok(Map.of(
-                "status", "deleted",
-                "filename", request.getFilename(),
-                "path", filePath.toString(),
-                "newUsedStorage", updatedStorage
-        ));
     }
 
 

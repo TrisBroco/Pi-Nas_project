@@ -11,11 +11,9 @@ import { useStorage } from "@/context/StorageContext";
 import {TiCloudStorage} from "react-icons/ti";
 import {formatFileSize} from "@/utils/formatFileSize";
 import {useUI} from "@/context/UIContext";
-import {useRouter} from "next/navigation";
 
-export default function MenuList({isMobile, onClose}) {
+export default function MenuList({isMobile, onClose, navigateTo}) {
     // let used = 150;
-    const router = useRouter();
     const storageData = useStorage();
     const {openModal} = useUI();
 
@@ -29,22 +27,27 @@ export default function MenuList({isMobile, onClose}) {
     function handleMenuAction(item) {
         console.log("handleMenuAction")
         switch (item.action) {
-            case "route":
-                // router.push("/files"); //Test the buttons
+            case "home":
+                navigateTo("");
                 break;
             case "upload":
                 console.log("upload button")
                 openModal("upload");
-                onClose;
+                onClose?.();
                 break;
             case "modal":
                 // setSettingsOpen(true);
                 break;
             case "logout":
-                // logout();
+                handleLogout();
                 break;
         }
     }
+
+    const handleLogout = async () => {
+        await fetch("/api/logout", { method: "POST" });
+        window.location.href = "/login";
+    };
 
     return (
 

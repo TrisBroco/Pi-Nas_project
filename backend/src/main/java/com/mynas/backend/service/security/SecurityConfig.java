@@ -102,15 +102,19 @@ public class SecurityConfig {
         System.out.println("SecurityConfig - CorsConfigurationSource()");
         CorsConfiguration config = new CorsConfiguration();
         // Allowed origin: change to your frontend origin (e.g. https://nas.example.com or http://localhost:3000 during dev)
-        config.setAllowedOrigins(List.of("http://localhost:3000", "http://192.168.1.156:3000"));
+        config.setAllowedOrigins(List.of(
+                "http://localhost:3000",
+                "http://192.168.1.156:3000",
+                "http://pi-nas:3000",
+                "http://192.168.1.152:3000"
+        ));
+
         //todo
         // - check and simply list of approved origins in something
         //          like the prod.properties file or .env for security and public github.
         //          local connections only for now so its okay.
-
-        config.setAllowedOrigins(List.of("http://pi-nas:3000", "http://192.168.1.152:3000"));
         config.setAllowCredentials(true); // important so browser will send cookies
-        config.setAllowedMethods(List.of("GET","POST","PUT","DELETE","OPTIONS"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
@@ -162,7 +166,7 @@ public class SecurityConfig {
     //todo checking for relevance. Think this is another late night duplicate
 //    @Bean
 //    public WebMvcConfigurer corsConfigurer() {
-//        System.out.println("SecurityConfig - WebMvcConfigurer()");
+//        System.out.println("SecurityConfig - WebMvcConfigurer()")
 //        return new WebMvcConfigurer() {
 //            @Override
 //            public void addCorsMappings(CorsRegistry registry) {

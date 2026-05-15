@@ -5,24 +5,18 @@ import com.mynas.backend.database.repositories.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.util.Optional;
-
 @Service
 public class UserService {
-    static UserRepository userRepository;
+    private final UserRepository userRepository;
 
     @Autowired
     public UserService(UserRepository userRepository) {
-        UserService.userRepository = userRepository;
+        this.userRepository = userRepository;
     }
 
-    public static Long getUserId(String  user) {
-    System.out.println("getUserId()");
-        Optional<User> userOpt = userRepository.findByUsername(user);
-        if (userOpt.isEmpty()) {
-            System.err.println("User not found: " + user);
-            return -1L;
-        }
-        return userOpt.get().getId();
+    public Long getUserId(String user){
+        return userRepository.findByUsername(user)
+                .map(User::getId)
+                .orElse(-1L);
     }
 }

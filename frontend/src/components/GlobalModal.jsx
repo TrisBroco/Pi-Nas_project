@@ -4,8 +4,9 @@ import { useUI } from "@/context/UIContext";
 import UploadArea from "./views/UploadArea";
 import VideoPreview from "./views/VideoPreview";
 import ImagePreview from "./views/ImagePreview";
+import DownloadPreview from "@/components/views/DownloadPreview";
 
-export default function GlobalModal() {
+export default function GlobalModal({ currentPath, navigateTo }) {
     const { modal, closeModal } = useUI();
     console.log("GlobalModal")
 
@@ -44,10 +45,10 @@ export default function GlobalModal() {
 
                 {/* Conditional Rendering based on "view" */}
                 <div className="flex-grow p-2 overflow-hidden flex flex-col">
-                    {modal.view === "upload" && <UploadArea />}
+                    {modal.view === "upload" && <UploadArea currentFolder={currentPath} navigateTo={navigateTo}/>}
                     {modal.view === "video" && <VideoPreview src={modal.data?.url} />}
                     {modal.view === "image" && <ImagePreview src={modal.data?.url} />}
-                    {modal.view === "other" && <div>Download view</div>}
+                    {modal.view === "other" && <DownloadPreview src={modal.data}/>}
                 </div>
             </div>
         </div>

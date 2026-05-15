@@ -46,7 +46,7 @@ public class FileRecord {
 
     @Setter
     @Getter
-    @Column(nullable = false)
+    @Column(nullable = false, unique = true)
     private String path;
 
     @Setter

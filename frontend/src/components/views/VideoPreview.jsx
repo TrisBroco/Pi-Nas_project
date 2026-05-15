@@ -9,52 +9,57 @@ export default function VideoPreview({ src: filename }) {
     const lastTimeRef = useRef(0);
     const refreshLock = useRef(false); // Prevents double-refresh loops
 
+    //TODO - VIDEO ROUTING change 5/11/2026 10:40
     const getStreamUrl = (count) =>
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/stream?filename=${encodeURIComponent(filename)}&v=${count}`;
+        `/api/stream?filename=${encodeURIComponent(filename)}&v=${count}`;
 
     // 1. We manage the source purely through an internal counter to avoid prop-drilling issues
     const [localCount, setLocalCount] = useState(0);
 
     const handleVideoError = async (e) => {
-        // Only handle actual 401/network errors, ignore "Aborted" errors caused by .load()
-        if (refreshLock.current || !videoRef.current) return;
-
         const video = videoRef.current;
+        if (!video) return;
 
-        // If there's no error object or it's just a playback pause, exit
-        if (video.error && video.error.code === 4) { // 4 = MEDIA_ERR_SRC_NOT_SUPPORTED/Unauthorized
-            console.log("Authentication/Source error detected.");
-        } else if (!video.error) {
+        // ← Check lock FIRST before anything else
+        if (refreshLock.current) {
+            console.log("Refresh already in progress, ignoring error");
             return;
         }
 
-        refreshLock.current = true;
+        // Only handle code 4 (auth/source error) — ignore aborts from .load()
+        if (!video.error || video.error.code !== 4) return;
+
+        console.log("Authentication/Source error detected.");
+        refreshLock.current = true;  // ← lock immediately, synchronously
         lastTimeRef.current = video.currentTime;
         setIsRefreshing(true);
 
         try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/refresh`, {
-                method: 'POST',
-                credentials: "include"
-            });
+            const res = await fetch(`/api/refresh`, { method: "POST" });
 
             if (res.ok) {
-                console.log("Token refreshed. Resuming...");
                 const nextCount = localCount + 1;
-
-                // CRITICAL: Manually update the video source and reload
-                video.src = getStreamUrl(nextCount);
-                video.load();
-
                 setLocalCount(nextCount);
-                setIsRefreshing(false);
-                refreshLock.current = false;
+
+                // Small delay before reloading — lets state settle
+                setTimeout(() => {
+                    if (videoRef.current) {
+                        videoRef.current.src = getStreamUrl(nextCount);
+                        videoRef.current.load();
+                    }
+                    // Only release lock AFTER load is called
+                    refreshLock.current = false;
+                    setIsRefreshing(false);
+                    console.log("Token refreshed. Resuming...");
+                }, 300);
             } else {
                 setError(true);
+                refreshLock.current = false;
             }
         } catch (err) {
             console.error("Refresh error:", err);
             setError(true);
+            refreshLock.current = false;
         }
     };
 
@@ -93,7 +98,6 @@ export default function VideoPreview({ src: filename }) {
                     controls
                     autoPlay
                     className="w-full h-full object-contain"
-                    crossOrigin="use-credentials"
                     onError={handleVideoError}
                     onLoadedMetadata={handleLoadedMetadata}
                     // Initial Source

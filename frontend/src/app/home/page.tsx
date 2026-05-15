@@ -4,11 +4,12 @@ import {FileRecord} from "@/types/FileRecord";
 import {cookies} from "next/headers";
 import {StorageProvider} from "@/context/StorageContext";
 import {UIProvider} from "@/context/UIContext";
-import GlobalModal from "@/components/GlobalModal";
+import {FolderRecord} from "@/types/FolderRecord";
 
-export default async function HomePage() {
-    console.log("home page");
-    console.log("IS SERVER:", typeof window === "undefined");
+export default async function HomePage({ searchParams }: { searchParams: Promise<{ path?: string }> }) {
+    const resolvedParams = await searchParams;
+    const currentPath = resolvedParams.path ?? "";
+
 
     const cookieStore = await cookies();
     const cookieHeader = cookieStore.getAll()
@@ -18,11 +19,9 @@ export default async function HomePage() {
     const backendURL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
 
-    // Fetch directly from Spring Boot, NOT your own /api/files
-    const res = await fetch(`${backendURL}/api/list`, {
-        headers: {
-            "Cookie": cookieHeader
-        },
+    // Pass folderPath to the backend
+    const res = await fetch(`${backendURL}/api/list?folderPath=${encodeURIComponent(currentPath)}`, {
+        headers: { "Cookie": cookieHeader },
         cache: "no-store",
     });
 
@@ -34,17 +33,19 @@ export default async function HomePage() {
 
     const storageData: { usedStorage: number, maxStorage: number } = await storageRes.json();
 
-    // 4. Success
+    // Success, file and folder info will be extracted.
     const data = await res.json();
     const files: FileRecord[] = Array.isArray(data.files) ? data.files : [];
-
+    const folders: FolderRecord[] = Array.isArray(data.folders) ? data.folders : [];
+    const user: string = data.user === null ? "" : data.user;
 
     return (
         <UIProvider>
             <StorageProvider value={storageData}>
-                {/* Now you don't need to pass storageData to HeaderMain! */}
-                <HomeClient files={files}/>
-                <GlobalModal/>
+                <HomeClient files={files}
+                            folders={folders}
+                            currentPath={currentPath}
+                            />
             </StorageProvider>
         </UIProvider>
     );

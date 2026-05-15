@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useRef } from "react";
-import {useRouter} from "next/navigation";
+import { useUI } from "@/context/UIContext";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
-export default function UploadArea({ user, currentFolder }) {
+export default function UploadArea({ currentFolder, navigateTo }) {
     const [files, setFiles] = useState([]);
+    const {closeModal} = useUI();
     const [uploading, setUploading] = useState(false);
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-expect-error
@@ -14,10 +15,7 @@ export default function UploadArea({ user, currentFolder }) {
     const [progressMap, setProgressMap] = useState({});
     const dropRef = useRef(null);
 
-    const router = useRouter();
 
-    user = "admin";
-    currentFolder = "";
     // Handle drag-over styling
     const handleDragOver = (e) => {
         e.preventDefault();
@@ -57,7 +55,10 @@ export default function UploadArea({ user, currentFolder }) {
         setUploading(false);
         setFiles([]);
         setProgressMap({})
-        router.refresh();
+        //used to refresh the current folder instead of refreshing
+        // the entire site.
+        navigateTo(currentFolder);
+        closeModal?.()
     };
 
     const uploadSingleFile = (file) => {
@@ -68,7 +69,7 @@ export default function UploadArea({ user, currentFolder }) {
             const xhr = new XMLHttpRequest();
             xhr.open(
                 "POST",
-                `${BACKEND_URL}/api/upload?user=${encodeURIComponent(user)}&folder=${encodeURIComponent(currentFolder)}`
+                `${BACKEND_URL}/api/upload?folder=${encodeURIComponent(currentFolder)}`
             );
 
             // CRITICAL: This allows the browser to send your session cookies
@@ -80,7 +81,7 @@ export default function UploadArea({ user, currentFolder }) {
                     const percent = Math.round((e.loaded / e.total) * 100);
                     setProgressMap((prev) => ({
                         ...prev,
-                        [file.name]: 0, //<- change to 0 if not working
+                        [file.name]: percent,
                     }));
                 }
             };
@@ -126,12 +127,6 @@ export default function UploadArea({ user, currentFolder }) {
                     className="hidden"
                     // id="fileInput"
                 />
-                {/*<label*/}
-                {/*    htmlFor="fileInput"*/}
-                {/*    className="block mt-3 text-blue-600 underline cursor-pointer"*/}
-                {/*>*/}
-                {/*    Select files*/}
-                {/*</label>*/}
             </label>
 
             {/* File List */}
