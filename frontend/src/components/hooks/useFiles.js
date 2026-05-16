@@ -2,7 +2,7 @@
 import {useState, useMemo, useEffect} from "react";
 import { Trie } from "@/utils/Trie";
 
-export function useFiles(initialFiles, initialFolders, initialPath) {
+export function useFiles(initialFiles, initialFolders, initialPath, refreshStorage) {
     const [files, setFiles] = useState(initialFiles);
     const [folders, setFolders] = useState(initialFolders);
     const [currentPath, setCurrentPath] = useState(initialPath);
@@ -47,7 +47,10 @@ export function useFiles(initialFiles, initialFolders, initialPath) {
     };
 
     useEffect(() => {
-        const refresh = () => navigateTo(currentPath);
+        const refresh = () => {
+            navigateTo(currentPath);
+            refreshStorage?.();
+        }
         window.addEventListener("file-deleted", refresh);
         return () => window.removeEventListener("file-deleted", refresh);
     }, [currentPath]);

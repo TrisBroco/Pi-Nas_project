@@ -5,7 +5,7 @@ import { useUI } from "@/context/UIContext";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
-export default function UploadArea({ currentFolder, navigateTo }) {
+export default function UploadArea({ currentFolder, navigateTo, refreshStorage }) {
     const [files, setFiles] = useState([]);
     const {closeModal} = useUI();
     const [uploading, setUploading] = useState(false);
@@ -58,7 +58,8 @@ export default function UploadArea({ currentFolder, navigateTo }) {
         //used to refresh the current folder instead of refreshing
         // the entire site.
         navigateTo(currentFolder);
-        closeModal?.()
+        refreshStorage?.();
+        closeModal?.();
     };
 
     const uploadSingleFile = (file) => {

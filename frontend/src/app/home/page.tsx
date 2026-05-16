@@ -2,11 +2,9 @@ import HomeClient from "@/components/HomeClient";
 import {redirect} from "next/navigation";
 import {FileRecord} from "@/types/FileRecord";
 import {cookies} from "next/headers";
-import {StorageProvider} from "@/context/StorageContext";
-import {UIProvider} from "@/context/UIContext";
 import {FolderRecord} from "@/types/FolderRecord";
 
-export default async function HomePage({ searchParams }: { searchParams: Promise<{ path?: string }> }) {
+export default async function HomePage({searchParams}: { searchParams: Promise<{ path?: string }> }) {
     const resolvedParams = await searchParams;
     const currentPath = resolvedParams.path ?? "";
 
@@ -21,7 +19,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 
     // Pass folderPath to the backend
     const res = await fetch(`${backendURL}/api/list?folderPath=${encodeURIComponent(currentPath)}`, {
-        headers: { "Cookie": cookieHeader },
+        headers: {"Cookie": cookieHeader},
         cache: "no-store",
     });
 
@@ -40,13 +38,11 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     const user: string = data.user === null ? "" : data.user;
 
     return (
-        <UIProvider>
-            <StorageProvider value={storageData}>
-                <HomeClient files={files}
-                            folders={folders}
-                            currentPath={currentPath}
-                            />
-            </StorageProvider>
-        </UIProvider>
+        <HomeClient
+            files={files}
+            folders={folders}
+            currentPath={currentPath}
+            storageData={storageData}
+        />
     );
 }

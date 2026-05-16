@@ -10,13 +10,13 @@ export default function TrashItem({ file, onRestore, onDelete }) {
                 <CiImageOn />
             </div>
             <div className="w-[40%] sm:w-[37%] h-full flex-none pr-2 flex flex-col justify-center overflow-hidden">
-                <span className="truncate text-gray-400">{file.name}</span>
-                <span className="text-xs text-gray-600">{file.folderPath || "root"}</span>
+                <span className="truncate text-gray-300">{file.name}</span>
+                <span className="text-xs text-gray-400">{file.folderPath || "root"}</span>
             </div>
-            <div className="hidden items-center h-full sm:flex sm:w-[25%] flex-none text-gray-600 text-sm">
+            <div className="hidden items-center h-full sm:flex sm:w-[25%] flex-none text-gray-300 text-sm">
                 {new Date(file.dateModified).toLocaleDateString()}
             </div>
-            <div className="hidden items-center h-full sm:flex sm:w-[10%] flex-none text-gray-600 text-sm">
+            <div className="hidden items-center h-full sm:flex sm:w-[10%] flex-none text-gray-300 text-sm">
                 {formatFileSize(file.size)}
             </div>
             <div className="w-[50%] sm:w-[20%] flex items-center justify-end gap-1 h-full flex-none pr-2">

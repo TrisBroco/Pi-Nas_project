@@ -36,7 +36,10 @@ export function useTrash() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ id: fileId }),
         });
-        if (res.ok) await fetchTrash();
+        if (res.ok) {
+            await fetchTrash();
+            window.dispatchEvent(new CustomEvent("file-deleted"));
+        }
         else alert("Delete failed");
     };
 

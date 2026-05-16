@@ -7,7 +7,7 @@ import java.util.Map;
 
 public class MimeTypes {
 
-    private static final Map<String, String> TYPES = Map.ofEntries(
+    private static final Map<String, String> TYPES = Map.<String, String>ofEntries(
             // Video
             Map.entry("mp4",  "video/mp4"),
             Map.entry("mkv",  "video/x-matroska"),

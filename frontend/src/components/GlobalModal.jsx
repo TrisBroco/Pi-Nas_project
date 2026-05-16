@@ -7,7 +7,7 @@ import ImagePreview from "./views/ImagePreview";
 import DownloadPreview from "@/components/views/DownloadPreview";
 import NewFolderView from "@/components/views/NewFolderView";
 
-export default function GlobalModal({ currentPath, navigateTo }) {
+export default function GlobalModal({ currentPath, navigateTo, refreshStorage }) {
     const { modal, closeModal } = useUI();
     console.log("GlobalModal")
 
@@ -47,7 +47,7 @@ export default function GlobalModal({ currentPath, navigateTo }) {
 
                 {/* Conditional Rendering based on "view" */}
                 <div className="flex-grow p-2 overflow-hidden flex flex-col">
-                    {modal.view === "upload" && <UploadArea currentFolder={currentPath} navigateTo={navigateTo}/>}
+                    {modal.view === "upload" && <UploadArea currentFolder={currentPath} navigateTo={navigateTo} refreshStorage={refreshStorage}/>}
                     {modal.view === "video" && <VideoPreview src={modal.data?.url} />}
                     {modal.view === "image" && <ImagePreview src={modal.data?.url} />}
                     {modal.view === "other" && <DownloadPreview src={modal.data}/>}
