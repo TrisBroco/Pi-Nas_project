@@ -31,7 +31,13 @@ export default function MobileDrawer({ isOpen, onClose }) {
                 </div>
 
                 <div className="flex-1 overflow-y-auto h-full w-full">
-                    <MenuList isMobile={true} onClose={onClose} />
+                    <MenuList
+                        isMobile={true}
+                        onClose={onClose}
+                        navigateTo={navigateTo}
+                        onViewChange={onViewChange}
+                        currentPath={currentPath}
+                    />
                 </div>
             </div>
         </div>,

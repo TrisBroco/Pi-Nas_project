@@ -5,6 +5,7 @@ import UploadArea from "./views/UploadArea";
 import VideoPreview from "./views/VideoPreview";
 import ImagePreview from "./views/ImagePreview";
 import DownloadPreview from "@/components/views/DownloadPreview";
+import NewFolderView from "@/components/views/NewFolderView";
 
 export default function GlobalModal({ currentPath, navigateTo }) {
     const { modal, closeModal } = useUI();
@@ -18,6 +19,7 @@ export default function GlobalModal({ currentPath, navigateTo }) {
             case 'upload': return 'Upload Files';
             case 'video': return 'Video Preview';
             case 'image': return 'Image Viewer';
+            case 'newFolder': return 'New Folder';
             default: return 'Preview';
         }
     };
@@ -49,6 +51,12 @@ export default function GlobalModal({ currentPath, navigateTo }) {
                     {modal.view === "video" && <VideoPreview src={modal.data?.url} />}
                     {modal.view === "image" && <ImagePreview src={modal.data?.url} />}
                     {modal.view === "other" && <DownloadPreview src={modal.data}/>}
+                    {modal.view === "newFolder" && (
+                        <NewFolderView
+                            currentPath={modal.data?.currentPath}
+                            navigateTo={navigateTo}
+                        />
+                    )}
                 </div>
             </div>
         </div>

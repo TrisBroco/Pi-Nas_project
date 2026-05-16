@@ -11,8 +11,9 @@ import { useStorage } from "@/context/StorageContext";
 import {TiCloudStorage} from "react-icons/ti";
 import {formatFileSize} from "@/utils/formatFileSize";
 import {useUI} from "@/context/UIContext";
+import NewUploadMenu from "@/components/menu/NewUploadMenu";
 
-export default function MenuList({isMobile, onClose, navigateTo}) {
+export default function MenuList({isMobile, onClose, navigateTo, onViewChange, currentPath}) {
     // let used = 150;
     const storageData = useStorage();
     const {openModal} = useUI();
@@ -28,6 +29,7 @@ export default function MenuList({isMobile, onClose, navigateTo}) {
         console.log("handleMenuAction")
         switch (item.action) {
             case "home":
+                onViewChange?.("files");
                 navigateTo("");
                 break;
             case "upload":
@@ -41,6 +43,10 @@ export default function MenuList({isMobile, onClose, navigateTo}) {
             case "logout":
                 handleLogout();
                 break;
+            case "Trash":
+                onViewChange?.("trash");
+                onClose?.();
+                break;
         }
     }
 
@@ -53,38 +59,34 @@ export default function MenuList({isMobile, onClose, navigateTo}) {
 
         // 3. LEFT PANEL: Menu List (Must be a vertical flex container)
         <div className={`flex flex-col h-full ${isMobile ? 'p-6' : ''}`}>
-
-            <div className=" flex items-center justify-start ps-4 pb-4">
+            <div className="flex items-center justify-start ps-4 pb-4">
                 <Image className={"hidden sm:block"}
                        src={"/logo-image.png"}
-                       width={50}
-                       height={50}
-                       alt={"Logo Image"}
+                       width={50} height={50} alt={"Logo Image"}
                 />
-
             </div>
 
             <div className="pl-4 pb-4 pr-4 flex flex-grow flex-col overflow-y-auto gap-y-4">
+                {/* New Upload Menu replaces the first button group */}
+                <NewUploadMenu currentPath={currentPath} />
 
-                {menuButtonConfig.map((group) => (
-                    <div key={group.id} className="flex flex-col">
-                        {group.items.map((item) => (
-                            <MenuButtons
-                                key={item.name}
-                                name={item.name}
-                                icon={item.icon}
-                                color={item.color}
-                                size={item.size}
-                                isActive={item.active}
-                                onClick={() => {
-                                    console.log(`${item.name} clicked`)
-                                    handleMenuAction(item)
-                                }}
-                            />
-                        ))}
-                    </div>
-                ))}
-
+                {menuButtonConfig
+                    .filter(group => group.id !== "new") // ← skip the "new" group
+                    .map((group) => (
+                        <div key={group.id} className="flex flex-col">
+                            {group.items.map((item) => (
+                                <MenuButtons
+                                    key={item.name}
+                                    name={item.name}
+                                    icon={item.icon}
+                                    color={item.color}
+                                    size={item.size}
+                                    isActive={item.active}
+                                    onClick={() => handleMenuAction(item)}
+                                />
+                            ))}
+                        </div>
+                    ))}
             </div>
 
             {/* The storage details can be positioned at the bottom */}

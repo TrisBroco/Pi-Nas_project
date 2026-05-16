@@ -17,11 +17,12 @@ export default function ImagePreview({ src: filename }) {
     );
 
     return (
-        <div className="w-full h-full flex items-center justify-center p-2">
+        // <div className="w-full h-full flex items-center justify-center p-2">
+        <div className="w-full max-w-5xl aspect-square rounded-2xl overflow-hidden relative">
             <img
                 src={imgSrc}
                 alt="Preview"
-                className="max-w-full max-h-full object-contain rounded-xl"
+                className="w-full h-full object-contain rounded-xl"
                 onError={() => setError(true)}
             />
         </div>
