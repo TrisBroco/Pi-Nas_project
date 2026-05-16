@@ -105,9 +105,6 @@ export default function UploadArea({ currentFolder, navigateTo, refreshStorage }
         });
     };
 
-
-
-
     return (
         <div className="flex flex-col flex-grow h-full gap-y-4">
             {/* Drag & Drop Zone */}

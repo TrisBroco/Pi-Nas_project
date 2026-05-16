@@ -1,7 +1,11 @@
 package com.mynas.backend.controller;
 
+import com.mynas.backend.database.FileRecord;
+import com.mynas.backend.database.repositories.FileRecordRepository;
+import com.mynas.backend.database.repositories.UserRepository;
 import com.mynas.backend.service.FileService;
 import com.mynas.backend.service.MimeTypes;
+import com.mynas.backend.service.UserService;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.core.io.support.ResourceRegion;
@@ -13,16 +17,23 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.NoSuchElementException;
 
 @RestController
 @RequestMapping("/api")
 public class MediaController {
     private final FileService fileService;
     private final Path storagePath;
+    private final UserService userService;
+    private final FileRecordRepository fileRecordRepository;
 
-    public MediaController(FileService fileService) {
+    public MediaController(FileService fileService,
+                           UserRepository userRepository,
+                           FileRecordRepository fileRecordRepository) {
         this.fileService = fileService;
         this.storagePath = Path.of(fileService.getRootFolder());
+        this.fileRecordRepository = fileRecordRepository;
+        userService = new UserService(userRepository);
     }
 
     @GetMapping("/stream")
@@ -31,16 +42,14 @@ public class MediaController {
             @RequestHeader HttpHeaders headers,
             Authentication auth) throws IOException {
 
-        String username = auth.getName();
-        Path userStoragePath = storagePath.resolve(username);
-        String normalized = filename.replace("\\", "/");
-        Path safePath = fileService.getSafePath(userStoragePath, normalized);
+        long userId = userService.getUserId(auth.getName());
+        Path diskPath = Path.of(resolveFileRecord(userId, filename).getPath());
 
-        if (!Files.exists(safePath)) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        if (!Files.exists(diskPath)) {
+            return ResponseEntity.notFound().build();
         }
 
-        UrlResource media = new UrlResource(safePath.toUri());
+        UrlResource media = new UrlResource(diskPath.toUri());
         long contentLength = media.contentLength();
         MediaType mediaType = MediaTypeFactory.getMediaType(media)
                 .orElse(MediaType.APPLICATION_OCTET_STREAM);
@@ -70,20 +79,35 @@ public class MediaController {
             Authentication auth) throws IOException {
 
         String username = auth.getName();
-        Path userStoragePath = storagePath.resolve(username);
-        String normalized = filename.replace("\\", "/");
-        Path safePath = fileService.getSafePath(userStoragePath, normalized);
+        long userId = userService.getUserId(username);
 
-        if (!Files.exists(safePath)) {
+        // Look up actual stored path from DB
+        FileRecord recordOpt = resolveFileRecord(userId, filename);
+
+        Path diskPath = Path.of(recordOpt.getPath());
+
+        if (!Files.exists(diskPath)) {
             return ResponseEntity.notFound().build();
         }
 
-        Resource resource = new UrlResource(safePath.toUri());
-        String contentType = MimeTypes.fromPath(safePath);
+        Resource resource = new UrlResource(diskPath.toUri());
+        String contentType = MimeTypes.fromPath(diskPath);
 
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(contentType))
                 .body(resource);
+    }
+
+    // Extract the record lookup into a private helper to avoid repeating it
+    private FileRecord resolveFileRecord(long userId, String filename) {
+        String normalized = filename.replace("\\", "/");
+        int lastSlash = normalized.lastIndexOf("/");
+        String folderPath = lastSlash == -1 ? "" : normalized.substring(0, lastSlash);
+        String name = lastSlash == -1 ? normalized : normalized.substring(lastSlash + 1);
+
+        return fileRecordRepository
+                .findByOwnerIdAndFolderPathAndNameAndIsDeletedFalse(userId, folderPath, name)
+                .orElseThrow(() -> new NoSuchElementException("File not found: " + filename));
     }
 
 }

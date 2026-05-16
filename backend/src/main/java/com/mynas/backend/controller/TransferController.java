@@ -35,6 +35,7 @@ public class TransferController {
     private static final Logger log = LoggerFactory.
             getLogger(FileController.class);
     private final UserRepository userRepository;
+    private final UserService userService;
     private final FileRecordRepository fileRecordRepository;
 
     public TransferController(FileService fileService, FileRecordRepository fileRecordRepository,
@@ -42,6 +43,7 @@ public class TransferController {
         this.fileService = fileService;
         this.storagePath = Path.of(fileService.getRootFolder());
         this.fileRecordRepository = fileRecordRepository;
+        this.userService = userService;
         this.userRepository = userRepository;
     }
 
@@ -50,31 +52,25 @@ public class TransferController {
             @RequestParam("filename") String filename,
             Authentication auth) throws IOException {
 
-        String username = auth.getName();
-        Path userStoragePath = storagePath.resolve(username);
-        String normalized = filename.replace("\\", "/");
-        Path safePath = fileService.getSafePath(userStoragePath, normalized);
+        long userId = userService.getUserId(auth.getName());
+        FileRecord record = resolveFileRecord(userId, filename);
+        Path diskPath = Path.of(record.getPath());
 
-        if (!Files.exists(safePath)) {
+        if (!Files.exists(diskPath)) {
             return ResponseEntity.notFound().build();
         }
 
-        Resource resource = new UrlResource(safePath.toUri());
+        Resource resource = new UrlResource(diskPath.toUri());
 
         //Fix for mobile devices not knowing what file is being downloaded
         // & defaulting to *.html.
-        String contentType = MimeTypes.fromPath(safePath);
-
-        //provides a safe default type if the files type cannot be determined.
-        if (contentType == null) {
-            contentType = "application/octet-stream";
-        }
+        String contentType = MimeTypes.fromPath(diskPath);
 
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(contentType))
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         "attachment; filename=\""
-                                + filename + "\"")
+                                + record.getName() + "\"")
                 .body(resource);
     }
 
@@ -217,8 +213,8 @@ public class TransferController {
             throw new IllegalArgumentException("Invalid folder path");
         }
 
-        // allow letters, numbers, underscore, dash, slash
-        return trimmed.replaceAll("[^a-zA-Z0-9_\\-]", "");
+        // allow letters, numbers, underscore, spaces, dash, slash
+        return trimmed.replaceAll("[^a-zA-Z0-9 _\\-]", "");
     }
 
     private String sanitizeFilename(String input) {
@@ -233,5 +229,17 @@ public class TransferController {
 
 
         return trimmed.replaceAll("[^a-zA-Z0-9_.\\-]", "");
+    }
+
+    // Extract the record lookup into a private helper to avoid repeating it
+    private FileRecord resolveFileRecord(long userId, String filename) {
+        String normalized = filename.replace("\\", "/");
+        int lastSlash = normalized.lastIndexOf("/");
+        String folderPath = lastSlash == -1 ? "" : normalized.substring(0, lastSlash);
+        String name = lastSlash == -1 ? normalized : normalized.substring(lastSlash + 1);
+
+        return fileRecordRepository
+                .findByOwnerIdAndFolderPathAndNameAndIsDeletedFalse(userId, folderPath, name)
+                .orElseThrow(() -> new NoSuchElementException("File not found: " + filename));
     }
 }

@@ -293,25 +293,10 @@ public class FileController {
                 return ResponseEntity.badRequest().body(Map.of("error", "Filename required"));
             }
 
-            // Relative path for DB look up
-            String relativePath = folderPath.isBlank()
-                    ? filename
-                    : folderPath + "/" + filename;
-
-            // Absolute path to check on disk
-            Path userStoragePath = storagePath.resolve(username);
-            String normalized = relativePath.replace("\\", "/");
-            Path diskPath = fileService.getSafePath(userStoragePath, normalized);
-
-            // Record look up in DB
+            // Record look up in DB by owner + folderPath
             Optional<FileRecord> recordOpt = fileRecordRepository
-                    .findByOwnerIdAndPath(userId, diskPath.toString().replace("/", "\\"));
-
-            if (recordOpt.isEmpty()) {
-                // Try with forward slashes too (linux?)
-                recordOpt = fileRecordRepository
-                        .findByOwnerIdAndPath(userId, diskPath.toString());
-            }
+                    .findByOwnerIdAndFolderPathAndNameAndIsDeletedFalse(
+                            userId, folderPath, filename);
 
             if (recordOpt.isEmpty()) {
                 return ResponseEntity.status(404).body(Map.of("error", "File not found in database"));
@@ -323,27 +308,6 @@ public class FileController {
             record.setDeleted(true);
             fileRecordRepository.save(record);
             println("/delete | soft deleted: " + record.getName());
-
-            /* TODO Change to implement Hard delete from TRASH instead
-            // Hard delete — remove from DB entirely
-            fileRecordRepository.delete(record);
-            println("/delete | removed from DB: " + record.getName());
-
-            // Delete from disk
-            if (Files.exists(diskPath)) {
-                Files.delete(diskPath);
-                println("/delete | deleted from disk: " + diskPath);
-            } else {
-                println("/delete | file not found on disk (already gone?): " + diskPath);
-            }
-
-            // Update user storage usage TODO Still counts as data until hard delete
-            Optional<User> userOpt = userRepository.findForUpdate(username);
-            userOpt.ifPresent(user -> {
-                long newUsed = Math.max(0, user.getUsedStorage() - record.getSize());
-                user.setUsedStorage(newUsed);
-                userRepository.save(user);
-            });*/
 
             return ResponseEntity.ok(Map.of(
                     "status", "deleted",
@@ -358,28 +322,6 @@ public class FileController {
         }
     }
 
-
-    private Path resolveSafePath(Path storageRoot, String user,
-                                 List<String> folders, String filename) {
-        Path path = storageRoot.resolve(sanitizeFolder(user));
-
-        if (folders != null) {
-            for (String folder : folders) {
-                path = path.resolve(sanitizeFolder(folder));
-            }
-        }
-
-        path = path.resolve(sanitizeFilename(filename));
-
-        Path normalized = path.toAbsolutePath().normalize();
-        Path rootAbs = storageRoot.toAbsolutePath().normalize();
-
-        if (!normalized.startsWith(rootAbs)) {
-            throw new SecurityException("Blocked path traversal attempt");
-        }
-
-        return normalized;
-    }
 
     @GetMapping("/metadata")
     public ResponseEntity<?> getFileMetadata(
@@ -493,6 +435,7 @@ public class FileController {
             Long fileId = Long.valueOf(body.get("id").toString());
 
             Optional<FileRecord> recordOpt = fileRecordRepository.findById(fileId);
+
             if (recordOpt.isEmpty() || recordOpt.get().getOwnerId() != userId) {
                 return ResponseEntity.status(404).body(Map.of("error", "File not found"));
             }
@@ -501,7 +444,10 @@ public class FileController {
 
             // Delete from disk
             Path diskPath = Path.of(record.getPath());
-            if (Files.exists(diskPath)) Files.delete(diskPath);
+            if (Files.exists(diskPath)) {
+                Files.delete(diskPath);
+                println("/delete/permanent | deleted from disk: " + diskPath);
+            }
 
             // Remove from DB
             fileRecordRepository.delete(record);

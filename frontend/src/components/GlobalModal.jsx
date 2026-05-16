@@ -15,13 +15,7 @@ export default function GlobalModal({ currentPath, navigateTo, refreshStorage })
 
     // Helper to determine title/header based on view
     const getTitle = () => {
-        switch(modal.view) {
-            case 'upload': return 'Upload Files';
-            case 'video': return 'Video Preview';
-            case 'image': return 'Image Viewer';
-            case 'newFolder': return 'New Folder';
-            default: return 'Preview';
-        }
+       return modal.title;
     };
 
     return (

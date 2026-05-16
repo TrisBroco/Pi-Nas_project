@@ -28,7 +28,7 @@ export default function FilesListItem({file}) {
                 ? `${file.folderPath}/${file.name}`
                 : file.name;
 
-            openModal(type, {
+            openModal(type, file.name, {
                 url: relativePath,   // fitness/abs.mp4
                 name: file.name
             });

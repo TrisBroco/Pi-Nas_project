@@ -51,7 +51,7 @@ export default function NewUploadMenu({ currentPath }) {
                     <button
                         onClick={() => {
                             setOpen(false);
-                            openModal("newFolder", { currentPath });
+                            openModal("newFolder"," ", { currentPath });
                         }}
                         className="w-full flex items-center gap-3 px-4 py-3 text-sm
                                    text-white hover:bg-yellow-600/20"

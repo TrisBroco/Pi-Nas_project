@@ -10,7 +10,7 @@ export function UIProvider({children}) {
         data: null      // Holds the file URL or metadata
     });
 
-    const openModal = (view, data = null) => setModal({isOpen: true, view, data});
+    const openModal = (view, title, data = null) => setModal({isOpen: true, view, title, data});
     const closeModal = () => setModal({isOpen: false, view: "upload", data: null});
 
     return (
