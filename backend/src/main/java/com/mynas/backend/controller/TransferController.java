@@ -30,17 +30,15 @@ import java.util.*;
 @RestController
 @RequestMapping("/api")
 public class TransferController {
-    private final FileService fileService;
     private final Path storagePath;
     private static final Logger log = LoggerFactory.
-            getLogger(FileController.class);
+            getLogger(TransferController.class);
     private final UserRepository userRepository;
     private final UserService userService;
     private final FileRecordRepository fileRecordRepository;
 
     public TransferController(FileService fileService, FileRecordRepository fileRecordRepository,
                               UserRepository userRepository, UserService userService) {
-        this.fileService = fileService;
         this.storagePath = Path.of(fileService.getRootFolder());
         this.fileRecordRepository = fileRecordRepository;
         this.userService = userService;
@@ -92,12 +90,6 @@ public class TransferController {
         // Base path: exp: /root/user
         Path userBase = storagePath.resolve(safeUser);
 
-        // Full final target directory as a Path
-        Path targetDir = safeFolder.isBlank()
-                ? userBase
-                : userBase.resolve(safeFolder);
-
-
 
         // Fetch user with DB lock with DBlock to avoid uploads incorrectly updating used_storage
         User userRecord = userRepository.findForUpdate(safeUser)
@@ -129,15 +121,13 @@ public class TransferController {
                     Objects.requireNonNull(file.getOriginalFilename())
             ).getFileName().toString();
 
-            // Sanitize filename
-            String safeFileName = sanitizeFilename(originalName);
+            String displayName = toDisplayName(originalName); 
+            String storedName = toStoredName(originalName);
+            Path filePath = userBase.resolve(storedName);
+            
             String extension = originalName.contains(".")
                     ? originalName.substring(originalName.lastIndexOf(".") + 1)
                     : "";
-
-            // UUID-prefixed flat storage
-            String storedName = UUID.randomUUID() + "_" + originalName;
-            Path filePath = userBase.resolve(storedName);
 
             String mimeType = MimeTypes.fromMultipart(file);
 
@@ -150,7 +140,7 @@ public class TransferController {
                 record.setExtension(extension);
                 record.setMimeType(mimeType);
                 record.setOwnerId(userRecord.getId());
-                record.setName(safeFileName);
+                record.setName(displayName);
                 record.setSize(file.getSize());
                 record.setChecksum(checksum);
                 record.setPath(filePath.toString());
@@ -158,31 +148,33 @@ public class TransferController {
                 fileRecordRepository.save(record);
 
                 // Save file
+                //TODO - Move Dir creation to /register endpoint
+                Files.createDirectories(userBase);
+
                 file.transferTo(filePath);
-                currentUsage += file.getSize();
 
                 // Update storage quota
+                currentUsage += file.getSize();
                 userRecord.setUsedStorage(currentUsage);
                 userRepository.save(userRecord);
 
-                log.info("Uploaded file '{}' to {} for user {}", safeFileName, safeFolder, safeUser);
+                log.info("Uploaded file '{}' to {} for user {}", displayName, safeFolder, safeUser);
                 successList.add(Map.of(
-                        "filename", safeFileName,
+                        "filename", displayName,
                         "path", filePath.toString(),
                         "status", "uploaded"
                 ));
             } catch (IOException e) {
-                log.error("Failed to upload file on Disk '{}' for user {}: {}", safeFileName, safeUser, e.getMessage());
+                log.error("Failed to upload file on Disk '{}' for user {}: {}", displayName, safeUser, e.getMessage());
                 fileRecordRepository.delete(record);
                 errorList.add(Map.of(
-                        "filename", safeFileName,
+                        "filename", displayName,
                         "error", e.getMessage()
                 ));
-            }
-            catch (Exception e) {
-                log.error("Failed to upload file on DB '{}' for user {}: {}", safeFileName, safeUser, e.getMessage());
+            } catch (Exception e) {
+                log.error("Failed to upload file on DB '{}' for user {}: {}", displayName, safeUser, e.getMessage());
                 errorList.add(Map.of(
-                        "filename", safeFileName,
+                        "filename", displayName,
                         "error", e.getMessage()
                 ));
             }
@@ -217,18 +209,24 @@ public class TransferController {
         return trimmed.replaceAll("[^a-zA-Z0-9 _\\-]", "");
     }
 
-    private String sanitizeFilename(String input) {
-        String trimmed = input.trim();
 
-        if (trimmed.contains("..") || trimmed.contains("/")
-                || trimmed.contains("\\")) {
+
+    // Strip characters that break JSON or DB storage
+    private String toDisplayName(String input) {
+        String trimmed = input.trim();
+        // Reject path traversal attempts
+        if (trimmed.contains("..") || trimmed.contains("/") || trimmed.contains("\\")) {
             throw new IllegalArgumentException("Invalid filename");
         }
+        // Keep everything except null bytes and control characters
+        return trimmed.replaceAll("[\\x00-\\x1F\\x7F]", "");
+    }
 
-        // allow letters, numbers, underscore, dash, and DOTS
-
-
-        return trimmed.replaceAll("[^a-zA-Z0-9_.\\-]", "");
+    // strips filesystem-illegal characters for safety
+    private String toStoredName(String input) {
+        String uuid = UUID.randomUUID().toString();
+        String safeSuffix = input.trim().replaceAll("[\\\\/:*?\"<>|]", "");
+        return uuid + "_" + safeSuffix;
     }
 
     // Extract the record lookup into a private helper to avoid repeating it
