@@ -6,6 +6,7 @@ import {BiSolidVideos} from "react-icons/bi";
 import {IoDocumentSharp, IoTrash} from "react-icons/io5";
 import {IoMdPhotos} from "react-icons/io";
 import {MdFavorite} from "react-icons/md";
+import { MdAdminPanelSettings } from "react-icons/md";
 
 export const menuButtonConfig = [
     {
@@ -40,6 +41,12 @@ export const menuButtonConfig = [
         id: "trash",
         items: [
             { name: "Trash", icon: IoTrash, color: "text-gray-400",  action: "Trash" }
+        ]
+    },
+    {
+        id: "admin",
+        items: [
+            { name: "Admin Console", icon: MdAdminPanelSettings, color: "text-red-400", action: "admin", active: true }
         ]
     }
 ];

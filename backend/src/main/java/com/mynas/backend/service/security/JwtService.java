@@ -2,7 +2,9 @@ package com.mynas.backend.service.security;
 
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
 
 import javax.crypto.SecretKey;
 import java.util.Date;
@@ -11,20 +13,21 @@ import java.util.Map;
 @Service
 public class JwtService {
 
-    /*
-       This secret key is the cryptographic key used to SIGN tokens.
-       Anyone who has the key can generate and validate JWTs.
+    // ✅ JwtService.java
+    @Value("${app.jwt-secret}")
+    private String secret;
 
-       Requirements:
-       - For HS256, must be at least 32 characters.
-       - Should come from environment variable in real systems.
-    */
-
-    //TODO move secret to your .env file for obvious security reasons
-    private static final String SECRET = "PN_9FAhyWG'mWA+FwPN_Gs2J_owB8[sFd-tf8)}Kd(@KcZ$Vs";
+    private SecretKey key;
 
     // Convert the raw string secret into a SecretKey object usable by JJWT.
-    private final SecretKey key = Keys.hmacShaKeyFor(SECRET.getBytes());
+    @PostConstruct
+    public void init() {
+        this.key = Keys.hmacShaKeyFor(secret.getBytes());
+    }
+
+
+
+
 
     /*
        Create a JWT token containing:

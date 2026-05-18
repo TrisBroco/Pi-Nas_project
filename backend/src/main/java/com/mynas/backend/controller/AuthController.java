@@ -1,7 +1,11 @@
 package com.mynas.backend.controller;
 
 import com.mynas.backend.database.RefreshToken;
+import com.mynas.backend.database.User;
 import com.mynas.backend.database.repositories.RefreshTokenRepository;
+import com.mynas.backend.database.repositories.UserRepository;
+import com.mynas.backend.service.AppSettings;
+import com.mynas.backend.service.FileService;
 import com.mynas.backend.service.security.JwtService;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -16,9 +20,12 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
@@ -32,6 +39,13 @@ public class AuthController {
     private final AuthenticationManager authManager;
     private final JwtService jwtService;
     private final RefreshTokenRepository refreshRepo;
+    private final AppSettings appSettings;
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final Path storagePath;
+
+    @Value("${nas.root-folder}")
+    private String rootFolder;
 
     @Value("${app.cookie-secure}")
     private boolean secure;
@@ -39,10 +53,16 @@ public class AuthController {
     private String sameSite;
 
     public AuthController(AuthenticationManager authManager, JwtService jwtService,
-                          RefreshTokenRepository refreshRepo) {
+                          RefreshTokenRepository refreshRepo, AppSettings appSettings,
+                          UserRepository userRepository, PasswordEncoder passwordEncoder,
+                          FileService fileService) {
         this.authManager = authManager;
         this.jwtService = jwtService;
         this.refreshRepo = refreshRepo;
+        this.appSettings = appSettings;
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.storagePath = Path.of(fileService.getRootFolder());
     }
 
     // Helper function to extract a cookie value
@@ -67,12 +87,68 @@ public class AuthController {
                 .sameSite(sameSite)
                 .build();
     }
+    @PostMapping("/register")
+    @Transactional
+    public ResponseEntity<?> register(
+            @RequestBody Map<String, String> body,
+            HttpServletResponse response) {
 
+        System.out.println("/AUTH/REGISTER");
 
-    /*
-       Login endpoint:
-       (FIXED: Added @Transactional)
-    */
+        // Check registration is open
+        if (!appSettings.isRegistrationOpen()) {
+            return ResponseEntity.status(403)
+                    .body(Map.of("error", "Registration is currently closed"));
+        }
+
+        String username = body.get("username");
+        String password = body.get("password");
+
+        // Validate input
+        if (username == null || username.isBlank() ||
+                password == null || password.isBlank()) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Username and password required"));
+        }
+
+        if (!username.matches("^[a-zA-Z0-9_]{3,20}$")) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Username must be 3-20 alphanumeric characters or underscores"));
+        }
+
+        if (password.length() < 8) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Password must be at least 8 characters"));
+        }
+
+        // Check username taken
+        if (userRepository.findByUsername(username).isPresent()) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Username already taken"));
+        }
+
+        // Create user
+        User user = new User();
+        user.setUsername(username);
+        user.setPassword(passwordEncoder.encode(password));
+        user.setRoles("USER");
+        user.setMaxStorage(100L * 1024 * 1024 * 1024); // 100GB default
+        user.setUsedStorage(0L);
+        userRepository.save(user);
+
+        // Create user directory on disk
+        try {
+            Path userDir = storagePath.resolve(username);
+            Files.createDirectories(userDir);
+        } catch (Exception e) {
+            // Don't fail registration if dir creation fails — upload will retry
+            System.err.println("Could not create user directory: " + e.getMessage());
+        }
+
+        System.out.println("/AUTH/REGISTER | created user: " + username);
+        return ResponseEntity.ok(Map.of("success", true, "username", username));
+    }
+
     @PostMapping("/login")
     @Transactional // <-- REQUIRED for delete and save operations
     public ResponseEntity<?> login(@RequestBody Map<String,String> body, HttpServletResponse response) {
@@ -124,8 +200,12 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
+        boolean isAdmin = user.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+
         return ResponseEntity.ok(Map.of(
-                "username", user.getUsername()
+                "username", user.getUsername(),
+                "isAdmin", isAdmin
         ));
     }
 

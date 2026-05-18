@@ -3,6 +3,7 @@ package com.mynas.backend.service.security;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -63,6 +64,8 @@ public class SecurityConfig {
                         .requestMatchers("/auth/me").authenticated()
                         .requestMatchers("/auth/**").permitAll()
                         .requestMatchers("/public/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/admin/settings").permitAll()
+                        .requestMatchers("/admin/**").authenticated()
                         .anyRequest().authenticated()
                 )
 
@@ -163,19 +166,4 @@ public class SecurityConfig {
         System.out.println("SecurityConfig - PasswordEncoder()");
         return PasswordEncoderFactories.createDelegatingPasswordEncoder();
     }
-    //todo checking for relevance. Think this is another late night duplicate
-//    @Bean
-//    public WebMvcConfigurer corsConfigurer() {
-//        System.out.println("SecurityConfig - WebMvcConfigurer()")
-//        return new WebMvcConfigurer() {
-//            @Override
-//            public void addCorsMappings(CorsRegistry registry) {
-//                registry.addMapping("/**")
-//                        .allowedOrigins("http://localhost:3000")
-//                        .allowedMethods("GET","POST","PUT","DELETE")
-//                        .allowCredentials(true);
-//            }
-//        };
-//    }
-
 }

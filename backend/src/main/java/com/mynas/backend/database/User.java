@@ -34,6 +34,7 @@ public class User {
     @Column(name = "date_created", nullable = false, updatable = false, columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
     private LocalDateTime dateCreated = LocalDateTime.now();
 
+    @Setter
     @Getter
     @Column(name="max_storage")
     private long maxStorage;

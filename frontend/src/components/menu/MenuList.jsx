@@ -13,10 +13,14 @@ import {formatFileSize} from "@/utils/formatFileSize";
 import {useUI} from "@/context/UIContext";
 import NewUploadMenu from "@/components/menu/NewUploadMenu";
 
+import { useRouter } from "next/navigation";
+
 export default function MenuList({isMobile, onClose, navigateTo, onViewChange, currentPath}) {
     // let used = 150;
     const storageData = useStorage();
     const {openModal} = useUI();
+
+    const router = useRouter();
 
     // console.log("Full storageData object:", storageData);
     const used = storageData?.usedStorage || 0;
@@ -45,6 +49,10 @@ export default function MenuList({isMobile, onClose, navigateTo, onViewChange, c
                 break;
             case "Trash":
                 onViewChange?.("trash");
+                onClose?.();
+                break;
+            case "admin":
+                router.push("/admin");
                 onClose?.();
                 break;
         }

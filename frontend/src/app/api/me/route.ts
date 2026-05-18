@@ -8,12 +8,12 @@ export async function GET() {
     const cookieStore = await cookies();
     const refreshToken = cookieStore.get("refresh_token")?.value;
 
-    // ❌ No refresh token = not logged in
+    // No refresh token = not logged in
     if (!refreshToken) {
         console.log("/api/me | no refresh token");
         return NextResponse.json({ authenticated: false }, { status: 401 });
     }
 
-    // ✅ Refresh token exists → user is logged in
+    // Refresh token exists → user is logged in
     return NextResponse.json({ authenticated: true }, { status: 200 });
 }

@@ -99,7 +99,8 @@ public class TransferController {
         long maxStorage = userRecord.getMaxStorage(); // default 300GB
         long currentUsage = userRecord.getUsedStorage();
 
-        // Process Each File
+        // Process Each File (Currently only receiving one file at a time but leaving
+        // for future cross-platform dev & updates if I end up sending all files at once.)
         for (MultipartFile file : files) {
             if (file == null || file.isEmpty()) {
                 errorList.add(Map.of("filename", "unknown", "error", "Empty file"));
@@ -148,7 +149,7 @@ public class TransferController {
                 fileRecordRepository.save(record);
 
                 // Save file
-                //TODO - Move Dir creation to /register endpoint
+                //User DIR should already be created at SignUp but here just in case.
                 Files.createDirectories(userBase);
 
                 file.transferTo(filePath);
