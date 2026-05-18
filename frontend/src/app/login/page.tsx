@@ -1,20 +1,19 @@
 "use client";
 
-import {useEffect, useState} from "react";
+import {useEffect, useState, Suspense} from "react";
 import {useRouter, useSearchParams} from "next/navigation";
-import { LogIn } from "lucide-react";
+import {LogIn} from "lucide-react";
 
 // This component handles form submission and redirects on success.
-export default function LoginPage() {
+    function LoginContent() {
     const router = useRouter();
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
     const [registrationOpen, setRegistrationOpen] = useState(false);
-    const searchParams = useSearchParams();
     const [notice, setNotice] = useState("");
-
+    const searchParams = useSearchParams();
 
     useEffect(() => {
         // Check if user is already logged in
@@ -46,7 +45,8 @@ export default function LoginPage() {
                     const data = await res.json();
                     setRegistrationOpen(data.registrationOpen);
                 }
-            } catch {}
+            } catch {
+            }
         };
 
         checkRegistration(); // immediate first check
@@ -71,15 +71,14 @@ export default function LoginPage() {
         console.log("submit pressed");
 
 
-
         try {
             // Fetch targets the Next.js API Proxy, not the Spring Boot backend directly.
             console.log("try statement");
             const res = await fetch("/api/login", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {"Content-Type": "application/json"},
                 credentials: "include",
-                body: JSON.stringify({ username, password }),
+                body: JSON.stringify({username, password}),
             });
             console.log("after await");
 
@@ -107,13 +106,14 @@ export default function LoginPage() {
             <div className="w-full max-w-sm rounded-xl bg-white p-8 shadow-2xl border border-gray-200">
                 {/* Notice banner — only shows when redirected from signup */}
                 {notice && (
-                    <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800 text-center">
+                    <div
+                        className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800 text-center">
                         {notice}
                     </div>
                 )}
 
                 <h1 className="mb-8 text-3xl font-bold text-gray-800 text-center flex items-center justify-center">
-                    <LogIn className="w-6 h-6 mr-2 text-blue-600" /> NAS Login
+                    <LogIn className="w-6 h-6 mr-2 text-blue-600"/> NAS Login
                 </h1>
 
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -155,9 +155,17 @@ export default function LoginPage() {
                             Don&#39;t have an account? Sign up
                         </button>
                     )}
-                    
+
                 </form>
             </div>
         </div>
+    );
+}
+
+export default function LoginPage() {
+    return (
+        <Suspense fallback={<div>Loading login...</div>}>
+            <LoginContent />
+        </Suspense>
     );
 }
