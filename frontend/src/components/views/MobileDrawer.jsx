@@ -1,7 +1,7 @@
 import { createPortal } from 'react-dom';
 import MenuList from "../menu/MenuList";
 
-export default function MobileDrawer({ isOpen, onClose }) {
+export default function MobileDrawer({ isOpen, onClose, navigateTo, onViewChange, currentPath }) {
     if (!isOpen) return null;
 
     // This "teleports" the HTML to the very end of the <body> tag

@@ -39,7 +39,6 @@ export default function MenuList({isMobile, onClose, navigateTo, onViewChange, c
             case "upload":
                 console.log("upload button")
                 openModal("upload");
-                onClose?.();
                 break;
             case "modal":
                 // setSettingsOpen(true);
@@ -49,13 +48,12 @@ export default function MenuList({isMobile, onClose, navigateTo, onViewChange, c
                 break;
             case "Trash":
                 onViewChange?.("trash");
-                onClose?.();
                 break;
             case "admin":
                 router.push("/admin");
-                onClose?.();
                 break;
         }
+        onClose?.();
     }
 
     const handleLogout = async () => {
