@@ -33,7 +33,7 @@ export async function proxyWithAuth(
         );
     }
 
-    // 1️⃣ Try original request
+    // Try original request
     let backendRes = await fetch(backendUrl, {
         ...options,
         headers: {
@@ -47,61 +47,38 @@ export async function proxyWithAuth(
         return forwardResponse(backendRes);
     }
 
-    // 2️⃣ If access token expired → try refresh
+    // If access token expired → try refresh
     if (backendRes.status === 401 && refreshToken) {
-        console.log("access expired")
-        const refreshRes = await fetch(REFRESH_URL, {
-            method: "POST",
-            headers: buildCookieHeader(undefined, refreshToken),
-        });
+        console.log("access expired — refreshing");
 
-        if (!refreshRes.ok) {
-            console.log("session expired")
-            return NextResponse.json(
-                {error: "Session expired"},
-                {status: 401}
-            );
-        }
-
-        // Forward refreshed cookies
-        const responseCookies = refreshRes.headers.getSetCookie();
-
-        // 1️⃣ Extract new access token
-        const newAccessCookie = responseCookies.find(c => c.startsWith("access_token="));
-        const newAccessToken = newAccessCookie?.split(";")[0].split("=")[1];
+        const newAccessToken = await refreshAccessToken(refreshToken);
 
         if (!newAccessToken) {
-            console.log("No access token in refresh response!");
-            return NextResponse.json({error: "Failed to refresh token"}, {status: 401});
+            console.log("session expired");
+            return NextResponse.json({ error: "Session expired" }, { status: 401 });
         }
 
-        // Retry original request (new access token is now valid)
+        // Retry with new token
         backendRes = await fetch(backendUrl, {
             ...options,
             headers: {
-                ...buildCookieHeader(
-                    // backend will read the NEW access token automatically
-                    newAccessToken,
-                    refreshToken
-                ),
+                ...buildCookieHeader(newAccessToken, refreshToken),
                 ...(options.headers || {}),
             },
             cache: "no-store",
         });
 
         if (!backendRes.ok) {
-            console.log("backendRes not okay")
             return NextResponse.json(
-                {error: "Authentication failed after refresh"},
-                {status: 401}
+                { error: "Authentication failed after refresh" },
+                { status: 401 }
             );
         }
 
-        const response = forwardResponse(backendRes);
-        for (const cookie of responseCookies) {
-            (await response).headers.append("Set-Cookie", cookie);
-        }
-
+        const response = await forwardResponse(backendRes);
+        // Forward the new access token cookie to the browser
+        const cookieValue = `access_token=${newAccessToken}; Path=/; HttpOnly; SameSite=Lax`;
+        response.headers.append("Set-Cookie", cookieValue);
         return response;
     }
 
@@ -109,6 +86,36 @@ export async function proxyWithAuth(
         {error: "Authentication failed"},
         {status: 401}
     );
+}
+
+// try to persist across requests in the same server process
+let refreshPromise: Promise<string | null> | null = null;
+
+async function refreshAccessToken(refreshToken: string): Promise<string | null> {
+    // If already refreshing, wait for that instead of starting another
+    if (refreshPromise) {
+        return refreshPromise;
+    }
+
+    refreshPromise = (async () => {
+        try {
+            const refreshRes = await fetch(REFRESH_URL, {
+                method: "POST",
+                headers: buildCookieHeader(undefined, refreshToken),
+            });
+
+            if (!refreshRes.ok) return null;
+
+            const responseCookies = refreshRes.headers.getSetCookie();
+            const newAccessCookie = responseCookies.find(c => c.startsWith("access_token="));
+            return newAccessCookie?.split(";")[0].split("=")[1] ?? null;
+        } finally {
+            // Always clear the lock when done
+            refreshPromise = null;
+        }
+    })();
+
+    return refreshPromise;
 }
 
 async function forwardResponse(res: Response) {

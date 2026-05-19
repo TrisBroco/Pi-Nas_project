@@ -12,5 +12,6 @@ export interface FileRecord {
     dateModified: string;
     isDeleted: boolean;
     version: number;
+    thumbnailPath: string;
     metadata: Record<string, any>;
 }

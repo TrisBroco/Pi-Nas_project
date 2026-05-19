@@ -27,6 +27,12 @@ export function useFiles(initialFiles, initialFolders, initialPath, refreshStora
                 cache: "no-store",
             });
 
+            if (res.status === 401) {
+                // Token refresh failed — session is dead, send to login
+                window.location.href = "/login";
+                return;
+            }
+
             if (!res.ok) {
                 console.error("Failed to fetch files:", res.status);
                 return;

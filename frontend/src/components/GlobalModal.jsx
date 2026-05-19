@@ -13,7 +13,7 @@ export default function GlobalModal({ currentPath, navigateTo, refreshStorage })
 
     if (!modal.isOpen) return null;
 
-    // Helper to determine title/header based on view
+    // Helper in case I want to change title dynamically
     const getTitle = () => {
        return modal.title;
     };
@@ -24,11 +24,11 @@ export default function GlobalModal({ currentPath, navigateTo, refreshStorage })
             onClick={closeModal} // Close if clicking the backdrop
         >
             <div
-                className="relative max-w-[90%] max-h-[90%] min-w-[60%] min-h-[60%] bg-white rounded-2xl  flex flex-col p-2"
+                className="relative max-w-[90%] max-h-[90%] min-w-[60%] min-h-[50%] bg-white rounded-2xl  flex flex-col p-2"
                 onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
             >
                 {/* Modal Header */}
-                <div className="flex items-center justify-between p-2">
+                <div className="flex border-b-2 items-center justify-between p-2">
                     <h2 className="w-[90%] text-xl font-bold text-gray-800">{getTitle()}</h2>
 
                     {/*/!* Close Button *!/*/}

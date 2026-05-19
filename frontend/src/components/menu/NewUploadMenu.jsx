@@ -5,7 +5,7 @@ import { FiUpload } from "react-icons/fi";
 import { FaFolderPlus } from "react-icons/fa";
 import { useUI } from "@/context/UIContext";
 
-export default function NewUploadMenu({ currentPath }) {
+export default function NewUploadMenu({ currentPath, onClose }) {
     const [open, setOpen] = useState(false);
     const menuRef = useRef(null);
     const { openModal } = useUI();
@@ -39,6 +39,7 @@ export default function NewUploadMenu({ currentPath }) {
                         onClick={() => {
                             setOpen(false);
                             openModal("upload");
+                            onClose?.();
                         }}
                         className="w-full flex items-center gap-3 px-4 py-3 text-sm
                                    text-white hover:bg-yellow-600/20"
@@ -52,6 +53,7 @@ export default function NewUploadMenu({ currentPath }) {
                         onClick={() => {
                             setOpen(false);
                             openModal("newFolder"," ", { currentPath });
+                            onClose?.();
                         }}
                         className="w-full flex items-center gap-3 px-4 py-3 text-sm
                                    text-white hover:bg-yellow-600/20"

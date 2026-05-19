@@ -78,6 +78,11 @@ public class FileRecord {
     @Column(columnDefinition = "json")
     private String metadataJson;
 
+    @Setter
+    @Getter
+    @Column(name = "thumbnail_path")
+    private String thumbnailPath;
+
     @PrePersist
     protected void onCreate() {
         this.dateCreated = LocalDateTime.now();

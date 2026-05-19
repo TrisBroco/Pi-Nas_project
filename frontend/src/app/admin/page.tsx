@@ -12,6 +12,11 @@ export default function AdminPage() {
     const [checking, setChecking] = useState(true);
     const [authorized, setAuthorized] = useState(false);
 
+    const handleGenerateThumbnails = async () => {
+        const res = await fetch("/api/admin/thumbnails/generate", { method: "POST" });
+        if (res.ok) setMessage("Thumbnail generation started — check server logs");
+    };
+
     useEffect(() => {
         const checkAdmin = async () => {
             try {
@@ -100,7 +105,14 @@ export default function AdminPage() {
                             ${registrationOpen ? "translate-x-7" : "translate-x-0"}`}
                         />
                     </button>
+
                 </div>
+                <button
+                onClick={handleGenerateThumbnails}
+                className="w-full mt-4 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700"
+            >
+                Generate Thumbnails for All Files
+            </button>
 
                 {message && (
                     <p className="text-sm text-center text-blue-600 mt-2">{message}</p>

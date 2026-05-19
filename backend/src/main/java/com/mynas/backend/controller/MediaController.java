@@ -18,6 +18,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 @RestController
 @RequestMapping("/api")
@@ -95,6 +97,7 @@ public class MediaController {
 
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(contentType))
+                .cacheControl(CacheControl.maxAge(7, TimeUnit.DAYS).cachePublic())
                 .body(resource);
     }
 
@@ -108,6 +111,34 @@ public class MediaController {
         return fileRecordRepository
                 .findByOwnerIdAndFolderPathAndNameAndIsDeletedFalse(userId, folderPath, name)
                 .orElseThrow(() -> new NoSuchElementException("File not found: " + filename));
+    }
+
+    @GetMapping("/thumbnail")
+    public ResponseEntity<Resource> serveThumbnail(
+            @RequestParam("id") Long fileId,
+            Authentication auth) throws IOException {
+
+        long userId = userService.getUserId(auth.getName());
+
+        Optional<FileRecord> recordOpt = fileRecordRepository.findById(fileId);
+        if (recordOpt.isEmpty() || recordOpt.get().getOwnerId() != userId) {
+            return ResponseEntity.notFound().build();
+        }
+
+        String thumbPath = recordOpt.get().getThumbnailPath();
+        if (thumbPath == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        Path path = Path.of(thumbPath);
+        if (!Files.exists(path)) {
+            return ResponseEntity.notFound().build();
+        }
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.IMAGE_JPEG)
+                .cacheControl(CacheControl.maxAge(7, TimeUnit.DAYS))
+                .body(new UrlResource(path.toUri()));
     }
 
 }

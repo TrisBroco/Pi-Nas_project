@@ -17,6 +17,7 @@ public record FileMetadataDTO(
         LocalDateTime dateModified,
         boolean deleted,
         int version,
+        String thumbnailPath,
         Map<String, Object> extra
 ) {
 }

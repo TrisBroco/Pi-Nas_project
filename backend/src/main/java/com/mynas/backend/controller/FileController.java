@@ -20,13 +20,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static com.mynas.backend.service.IO.println;
@@ -106,7 +104,7 @@ public class FileController {
                             fr.getChecksum(), fr.getPath(),
                             fr.getFolderPath(), fr.getDateCreated(),
                             fr.getDateModified(), fr.isDeleted(),
-                            fr.getVersion(), getMetadataMap(fr)
+                            fr.getVersion(), fr.getThumbnailPath(), getMetadataMap(fr)
                     ))
                     .toList();
 
@@ -260,18 +258,6 @@ public class FileController {
         return trimmed.replaceAll("[^a-zA-Z0-9_.\\-]", "");
     }
 
-
-    private Path getSafePath(Path baseDir, Path finalPath) {
-        Path normalized = finalPath.normalize().toAbsolutePath();
-        Path safeBase = baseDir.normalize().toAbsolutePath();
-
-        if (!normalized.startsWith(safeBase)) {
-            throw new SecurityException("Blocked path traversal attempt: "
-                    + finalPath);
-        }
-        return normalized;
-    }
-
     @DeleteMapping("/delete")
     @Transactional
     public ResponseEntity<?> deleteFile(
@@ -286,23 +272,31 @@ public class FileController {
                 return ResponseEntity.status(404).body(Map.of("error", "User not found"));
             }
 
-            String filename = (String) body.get("filename");
-            String folderPath = (String) body.getOrDefault("folderPath", "");
+            FileRecord record;
+            if (body.get("id") != null) {
+                Long fileId = Long.valueOf(body.get("id").toString());
+                record = getValidatedFileRecord(fileId, userId);
+            } else {
+                //fallback in case ID is null, lookup by name
+                String filename = (String) body.get("filename");
+                String folderPath = (String) body.getOrDefault("folderPath", "");
 
-            if (filename == null || filename.isBlank()) {
-                return ResponseEntity.badRequest().body(Map.of("error", "Filename required"));
+                if (filename == null || filename.isBlank()) {
+                    return ResponseEntity.badRequest().body(Map.of("error", "Filename required"));
+                }
+
+                // Record look up in DB by owner + folderPath
+                Optional<FileRecord> recordOpt = fileRecordRepository
+                        .findByOwnerIdAndFolderPathAndNameAndIsDeletedFalse(
+                                userId, folderPath, filename);
+
+                if (recordOpt.isEmpty()) {
+                    return ResponseEntity.status(404).body(Map.of("error", "File not found in database"));
+                }
+
+                record = recordOpt.get();
             }
 
-            // Record look up in DB by owner + folderPath
-            Optional<FileRecord> recordOpt = fileRecordRepository
-                    .findByOwnerIdAndFolderPathAndNameAndIsDeletedFalse(
-                            userId, folderPath, filename);
-
-            if (recordOpt.isEmpty()) {
-                return ResponseEntity.status(404).body(Map.of("error", "File not found in database"));
-            }
-
-            FileRecord record = recordOpt.get();
 
             // Soft delete — mark as deleted in DB for trash feature
             record.setDeleted(true);
@@ -366,6 +360,7 @@ public class FileController {
                     file.getDateModified(),
                     file.isDeleted(),
                     file.getVersion(),
+                    file.getThumbnailPath(),
                     getMetadataMap(file)
             );
 
@@ -394,7 +389,7 @@ public class FileController {
                             fr.getId(), fr.getName(), fr.getExtension(), fr.getMimeType(),
                             fr.getOwnerId(), fr.getSize(), fr.getChecksum(), fr.getPath(),
                             fr.getFolderPath(), fr.getDateCreated(), fr.getDateModified(),
-                            fr.isDeleted(), fr.getVersion(), getMetadataMap(fr)
+                            fr.isDeleted(), fr.getVersion(), fr.getThumbnailPath(), getMetadataMap(fr)
                     )).toList();
 
             return ResponseEntity.ok(Map.of("files", trashFiles));
@@ -411,12 +406,8 @@ public class FileController {
             long userId = userService.getUserId(username);
             Long fileId = Long.valueOf(body.get("id").toString());
 
-            Optional<FileRecord> recordOpt = fileRecordRepository.findById(fileId);
-            if (recordOpt.isEmpty() || recordOpt.get().getOwnerId() != userId) {
-                return ResponseEntity.status(404).body(Map.of("error", "File not found"));
-            }
+            FileRecord record = getValidatedFileRecord(fileId, userId);
 
-            FileRecord record = recordOpt.get();
             record.setDeleted(false);
             fileRecordRepository.save(record);
 
@@ -424,6 +415,13 @@ public class FileController {
         } catch (Exception e) {
             return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
         }
+    }
+
+    //I put a null safe Object.equals() here, if it is not behaving as expected, set it back to "==" comparison
+    private FileRecord getValidatedFileRecord(Long fileId, Long userId) {
+        return fileRecordRepository.findById(fileId)
+                .filter(record -> Objects.equals(record.getOwnerId(), userId)) // Keeps it if owner matches
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "File not found"));
     }
 
     @DeleteMapping("/delete/permanent")
@@ -434,13 +432,7 @@ public class FileController {
             long userId = userService.getUserId(username);
             Long fileId = Long.valueOf(body.get("id").toString());
 
-            Optional<FileRecord> recordOpt = fileRecordRepository.findById(fileId);
-
-            if (recordOpt.isEmpty() || recordOpt.get().getOwnerId() != userId) {
-                return ResponseEntity.status(404).body(Map.of("error", "File not found"));
-            }
-
-            FileRecord record = recordOpt.get();
+            FileRecord record = getValidatedFileRecord(fileId, userId);
 
             // Delete from disk
             Path diskPath = Path.of(record.getPath());

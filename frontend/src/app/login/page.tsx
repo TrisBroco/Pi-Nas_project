@@ -116,7 +116,10 @@ import {LogIn} from "lucide-react";
                     <LogIn className="w-6 h-6 mr-2 text-blue-600"/> NAS Login
                 </h1>
 
-                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                <form onSubmit={handleSubmit}
+                      action="#"
+                      method="post"
+                      className="flex flex-col gap-4">
                     <input
                         type="text"
                         placeholder="Username (e.g., user)"

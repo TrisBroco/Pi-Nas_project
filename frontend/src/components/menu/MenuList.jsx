@@ -44,7 +44,7 @@ export default function MenuList({isMobile, onClose, navigateTo, onViewChange, c
                 // setSettingsOpen(true);
                 break;
             case "logout":
-                handleLogout();
+
                 break;
             case "Trash":
                 onViewChange?.("trash");
@@ -55,11 +55,6 @@ export default function MenuList({isMobile, onClose, navigateTo, onViewChange, c
         }
         onClose?.();
     }
-
-    const handleLogout = async () => {
-        await fetch("/api/logout", { method: "POST" });
-        window.location.href = "/login";
-    };
 
     return (
 
@@ -74,7 +69,7 @@ export default function MenuList({isMobile, onClose, navigateTo, onViewChange, c
 
             <div className="pl-4 pb-4 pr-4 flex flex-grow flex-col overflow-y-auto gap-y-4">
                 {/* New Upload Menu replaces the first button group */}
-                <NewUploadMenu currentPath={currentPath} />
+                <NewUploadMenu currentPath={currentPath} onClose={onClose} />
 
                 {menuButtonConfig
                     .filter(group => group.id !== "new") // ← skip the "new" group

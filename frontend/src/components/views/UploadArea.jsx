@@ -1,5 +1,5 @@
 "use client";
-import {useState, useRef} from "react";
+import {useState, useRef, useEffect} from "react";
 import {useUI} from "@/context/UIContext";
 import {formatFileSize} from "@/utils/formatFileSize";
 import {useStorage} from "@/context/StorageContext";
@@ -15,6 +15,8 @@ export default function UploadArea({currentFolder, navigateTo, refreshStorage}) 
     const {closeModal} = useUI();
     const dropRef = useRef(null);
     const storageData = useStorage();
+    const rowRefs = useRef({});
+    const scrollContainerRef = useRef(null);
 
     const updateStatus = (index, patch) => {
         setFileStatuses(prev =>
@@ -23,6 +25,7 @@ export default function UploadArea({currentFolder, navigateTo, refreshStorage}) 
     };
 
     const dragCounter = useRef(0);
+    const [remainingUploads, setRemainingUploads] = useState(0);
     const [isDragging, setIsDragging] = useState(false);
 
     const handleDragOver = (e) => {
@@ -160,11 +163,13 @@ export default function UploadArea({currentFolder, navigateTo, refreshStorage}) 
             .filter(s => s.status === "pending" || s.status === "error");
 
         if (pending.length === 0) return;
+        setRemainingUploads(pending.length);
 
         setUploading(true);
 
         for (const {file, index} of pending) {
             await uploadSingleFile(file, index);
+            setRemainingUploads(prev => prev - 1);
         }
 
         setUploading(false);
@@ -182,6 +187,17 @@ export default function UploadArea({currentFolder, navigateTo, refreshStorage}) 
         }
     };
 
+    // Auto-scroll to the currently uploading file
+    useEffect(() => {
+        const uploadingIndex = fileStatuses.findIndex(s => s.status === "uploading");
+        if (uploadingIndex !== -1 && rowRefs.current[uploadingIndex]) {
+            rowRefs.current[uploadingIndex].scrollIntoView({
+                behavior: "smooth",
+                block: "nearest",
+            });
+        }
+    }, [fileStatuses]);
+
     const clearFiles = async () => {
         const pending = fileStatuses
             .map((s, i) => ({...s, index: i}))
@@ -195,7 +211,7 @@ export default function UploadArea({currentFolder, navigateTo, refreshStorage}) 
     const allDone = hasFiles && fileStatuses.every(s => s.status === "done");
 
     return (
-        <div className="flex flex-col flex-grow h-max gap-y-4 overflow-hidden">
+        <div className="flex flex-col flex-grow h-full gap-y-4 overflow-hidden">
 
             {/* Drop zone — hide while uploading */}
             {/*TODO Maybe add an animation later for closing the update?*/}
@@ -226,10 +242,11 @@ export default function UploadArea({currentFolder, navigateTo, refreshStorage}) 
 
             {/* File list — always visible once files are added */}
             {hasFiles && (
-                <div className="flex-grow overflow-y-auto flex flex-col gap-2">
+                <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-2">
                     {fileStatuses.map(({file, status, progress, error}, index) => (
                         <div
                             key={index}
+                            ref={el => rowRefs.current[index] = el}
                             className={`p-3 rounded-lg border text-sm
                                 ${status === "done" ? "border-green-200 bg-green-50" :
                                 status === "error" || status === "tooLarge" ? "border-red-200 bg-red-50" :
@@ -313,7 +330,7 @@ export default function UploadArea({currentFolder, navigateTo, refreshStorage}) 
                         className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg
                                    hover:bg-blue-700 disabled:opacity-50 font-semibold"
                     >
-                        {uploading ? "Uploading..." : `Upload ${fileStatuses.filter(s => s.status === "pending").length} file(s)`}
+                        {uploading ? `Uploading ${remainingUploads} files..` : `Upload ${fileStatuses.filter(s => s.status === "pending").length} file(s)`}
                     </button>
                 )}
 

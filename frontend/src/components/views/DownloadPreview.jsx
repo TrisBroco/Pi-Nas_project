@@ -1,9 +1,9 @@
 import {FiDownload} from "react-icons/fi";
 
-export default function DownloadPreview({ src: data }){
-    return(
-        <div className="flex flex-col items-center justify-center h-full gap-4">
-            <p className="text-gray-500 text-sm">{data?.name}</p>
+export default function DownloadPreview({src: data}) {
+    return (
+        <div className="flex flex-grow  items-center justify-center h-full gap-4">
+
             <button
                 onClick={() => {
                     const a = document.createElement("a");
@@ -15,7 +15,7 @@ export default function DownloadPreview({ src: data }){
                 }}
                 className="flex items-center gap-2 bg-yellow-600 hover:bg-yellow-700 text-white px-6 py-3 rounded-xl font-semibold"
             >
-                <FiDownload /> Download {data?.name}
+                <FiDownload/> Download {data?.name}
             </button>
         </div>
     )

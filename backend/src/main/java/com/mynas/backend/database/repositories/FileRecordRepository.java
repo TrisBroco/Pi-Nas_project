@@ -13,4 +13,7 @@ public interface FileRecordRepository extends JpaRepository<FileRecord, Long> {
     List<FileRecord> findByOwnerIdAndIsDeletedTrue(long ownerId);
     Optional<FileRecord> findByOwnerIdAndFolderPathAndNameAndIsDeletedFalse(
             long ownerId, String folderPath, String name);
+
+    boolean existsByOwnerIdAndFolderPathAndNameAndIsDeletedFalse(
+            long ownerId, String folderPath, String name);
 }

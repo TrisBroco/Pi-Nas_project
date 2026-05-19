@@ -6,6 +6,7 @@ import com.mynas.backend.database.repositories.FileRecordRepository;
 import com.mynas.backend.database.repositories.UserRepository;
 import com.mynas.backend.service.FileService;
 import com.mynas.backend.service.MimeTypes;
+import com.mynas.backend.service.ThumbnailService;
 import com.mynas.backend.service.UserService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,6 +27,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 
 @RestController
 @RequestMapping("/api")
@@ -36,13 +38,16 @@ public class TransferController {
     private final UserRepository userRepository;
     private final UserService userService;
     private final FileRecordRepository fileRecordRepository;
+    private final ThumbnailService thumbnailService;
+
 
     public TransferController(FileService fileService, FileRecordRepository fileRecordRepository,
-                              UserRepository userRepository, UserService userService) {
+                              UserRepository userRepository, UserService userService, ThumbnailService thumbnailService) {
         this.storagePath = Path.of(fileService.getRootFolder());
         this.fileRecordRepository = fileRecordRepository;
         this.userService = userService;
         this.userRepository = userRepository;
+        this.thumbnailService = thumbnailService;
     }
 
     @GetMapping("/download")
@@ -82,6 +87,7 @@ public class TransferController {
 
         List<Map<String, String>> successList = new ArrayList<>();
         List<Map<String, String>> errorList = new ArrayList<>();
+        System.out.println("Upload Folder Path: " + folder);
 
         String safeUser = auth.getName();
         String safeFolder = (folder == null || folder.isBlank()) ? ""
@@ -125,6 +131,19 @@ public class TransferController {
             String displayName = toDisplayName(originalName); 
             String storedName = toStoredName(originalName);
             Path filePath = userBase.resolve(storedName);
+
+            boolean exists = fileRecordRepository
+                    .existsByOwnerIdAndFolderPathAndNameAndIsDeletedFalse(
+                            userRecord.getId(), safeFolder, displayName);
+
+            if (exists) {
+                log.error("Files already exist");
+                errorList.add(Map.of(
+                        "filename", Objects.requireNonNull(file.getOriginalFilename()),
+                        "error", "A file with this name already exists in this folder"
+                ));
+                continue;
+            }
             
             String extension = originalName.contains(".")
                     ? originalName.substring(originalName.lastIndexOf(".") + 1)
@@ -165,6 +184,27 @@ public class TransferController {
                         "path", filePath.toString(),
                         "status", "uploaded"
                 ));
+
+                final String savedMimeType = mimeType;
+                final Long recordId = record.getId();
+                final String savedUsername = safeUser;
+
+                // Generate thumbnail asynchronously — shouldn't block the upload response
+                CompletableFuture.runAsync(() -> {
+                    try {
+                        String thumbPath = thumbnailService.generateThumbnail(
+                                filePath, savedMimeType, savedUsername);
+                        if (thumbPath != null) {
+                            fileRecordRepository.findById(recordId).ifPresent(r -> {
+                                r.setThumbnailPath(thumbPath);
+                                fileRecordRepository.save(r);
+                            });
+                        }
+                    } catch (Exception e) {
+                        log.warn("Async thumbnail generation failed for record {}: {}", recordId, e.getMessage());
+                    }
+                });
+
             } catch (IOException e) {
                 log.error("Failed to upload file on Disk '{}' for user {}: {}", displayName, safeUser, e.getMessage());
                 fileRecordRepository.delete(record);
@@ -200,14 +240,25 @@ public class TransferController {
             return "";
         }
 
-        String trimmed = input.trim();
+        // Normalize separators and trim
+        // Converts Windows '\' to Unix '/' so you only have to reason about one separator
+        String normalized = input.replace("\\", "/").trim();
 
-        if (trimmed.contains("..")) {
-            throw new IllegalArgumentException("Invalid folder path");
+        // Prevent Path Traversal
+        // Block relative directory climbing (e.g., ../../etc)
+        // Also block absolute paths starting with '/' to prevent escaping the root upload dir
+        if (normalized.contains("..") || normalized.startsWith("/")) {
+            throw new IllegalArgumentException("Invalid folder path: Path traversal or absolute paths detected");
         }
 
-        // allow letters, numbers, underscore, spaces, dash, slash
-        return trimmed.replaceAll("[^a-zA-Z0-9 _\\-]", "");
+        // Allow letters, numbers, spaces, underscores, dashes, AND forward slashes
+        // We added '/' to the allowed character class
+        String sanitized = normalized.replaceAll("[^a-zA-Z0-9 _\\-/]", "");
+
+        // Post-cleanup: Prevent edge-cases like accidental duplicate slashes (e.g., "folder//subfolder")
+        sanitized = sanitized.replaceAll("/{2,}", "/");
+
+        return sanitized;
     }
 
 
@@ -216,11 +267,22 @@ public class TransferController {
     private String toDisplayName(String input) {
         String trimmed = input.trim();
         // Reject path traversal attempts
-        if (trimmed.contains("..") || trimmed.contains("/") || trimmed.contains("\\")) {
-            throw new IllegalArgumentException("Invalid filename");
+        while (trimmed.contains("..")) {
+            trimmed = trimmed.replace("..", ".");
         }
-        // Keep everything except null bytes and control characters
-        return trimmed.replaceAll("[\\x00-\\x1F\\x7F]", "");
+        trimmed = trimmed.trim();
+
+        String cleaned = trimmed
+                .replace("/", "_")
+                .replace("\\", "_")
+                .replaceAll("[\\x00-\\x1F\\x7F]", "") // strip control characters
+                .trim();
+
+        if (cleaned.isBlank()) {
+            throw new IllegalArgumentException("Filename is empty after sanitization");
+        }
+
+        return cleaned;
     }
 
     // strips filesystem-illegal characters for safety
